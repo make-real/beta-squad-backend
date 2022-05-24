@@ -263,7 +263,7 @@ exports.addMembers = async (req, res, next) => {
 					if (iAMManager) {
 						if (memberId) {
 							if (isValidObjectId(memberId)) {
-								var memberExists = await User.exists({ _id: memberId });
+								const memberExists = await User.exists({ _id: memberId });
 								if (memberExists) {
 									const alreadyMember = await await Space.exists({ $and: [{ _id: spaceId }, { "members.member": memberId }] });
 									if (!alreadyMember) {
@@ -288,6 +288,69 @@ exports.addMembers = async (req, res, next) => {
 									}
 								} else {
 									issue.message = "Member not found!";
+								}
+							} else {
+								issue.message = "Invalid member id!";
+							}
+						} else {
+							issue.message = "Please provide member id!";
+						}
+					} else {
+						issue.message = "You have no access to perform this operation!";
+					}
+				} else {
+					issue.message = "Space not found";
+				}
+			} else {
+				issue.message = "Invalid space id!";
+			}
+		} else {
+			issue.message = "Please provide space id!";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+exports.removeMembers = async (req, res, next) => {
+	let { spaceId } = req.params;
+	let { memberId } = req.body;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		if (spaceId) {
+			if (isValidObjectId(spaceId)) {
+				const spaceExists = await Space.exists({ _id: spaceId });
+				if (spaceExists) {
+					const iAMManager = await Space.exists({ $and: [{ _id: spaceId }, { members: { $elemMatch: { member: user._id, role: "manager" } } }] });
+
+					if (iAMManager) {
+						if (memberId) {
+							if (isValidObjectId(memberId)) {
+								const memberExistsInSpace = await await Space.exists({ $and: [{ _id: spaceId }, { "members.member": memberId }] });
+								if (memberExistsInSpace) {
+									const memberPush = await Space.updateOne(
+										{ _id: spaceId },
+										{
+											$pull: {
+												members: {
+													member: memberId,
+												},
+											},
+										}
+									);
+
+									if (memberPush.modifiedCount) {
+										return res.json({ message: "Successfully removed the member from the space!" });
+									} else {
+										issue.message = "Failed to add member!";
+									}
+								} else {
+									issue.message = "Already removed this member from the space!";
 								}
 							} else {
 								issue.message = "Invalid member id!";
