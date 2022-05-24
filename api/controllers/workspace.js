@@ -67,10 +67,21 @@ exports.createWorkspace = async (req, res, next) => {
 exports.getWorkspace = async (req, res, next) => {
 	let { limit, skip } = req.query;
 	try {
+		const user = req.user;
 		limit = parseInt(limit) || 10;
 		skip = parseInt(skip) || 0;
-		const user = req.user;
-		const getWorkspace = await Workspace.find({ owner: user._id }).sort({ createdAt: -1 }).skip(skip).limit(limit);
+
+		const getSpaces = await Space.find({ "members.member": user._id }).select("workSpaceRef");
+
+		const workspaceIds = [];
+		for (const space of getSpaces) {
+			workspaceIds.push(space.workSpaceRef);
+		}
+
+		const getWorkspace = await Workspace.find({ _id: { $in: workspaceIds } })
+			.sort({ createdAt: -1 })
+			.skip(skip)
+			.limit(limit);
 
 		return res.send({ workspaces: getWorkspace });
 	} catch (err) {
