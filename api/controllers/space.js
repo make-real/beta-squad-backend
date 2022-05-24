@@ -102,3 +102,32 @@ exports.createSpace = async (req, res, next) => {
 		next(err);
 	}
 };
+
+exports.getSpace = async (req, res, next) => {
+	let { workspaceId, limit, skip } = req.query;
+	try {
+		limit = parseInt(limit) || 20;
+		skip = parseInt(skip) || 0;
+		const user = req.user;
+		const issue = {};
+
+		if (workspaceId) {
+			if (isValidObjectId(workspaceId)) {
+				const getSpace = await Space.find({ $and: [{ "members.member": user._id }, { workSpaceRef: workspaceId }] })
+					.sort({ createdAt: -1 })
+					.skip(skip)
+					.limit(limit);
+
+				return res.send({ spaces: getSpace });
+			} else {
+				issue.message = "Invalid workspace id!";
+			}
+		} else {
+			issue.message = "Please provide workspace id!";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
