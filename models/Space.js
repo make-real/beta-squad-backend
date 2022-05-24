@@ -16,6 +16,11 @@ const spaceSchema = new Schema(
 			type: String,
 			default: "#7850fc",
 		},
+		privacy: {
+			type: String,
+			enum: ["public", "private"],
+			default: "public",
+		},
 		members: {
 			type: [
 				{
@@ -25,7 +30,7 @@ const spaceSchema = new Schema(
 					},
 					role: {
 						type: String,
-						enum: ["admin", "member"],
+						enum: ["manager", "member"],
 						default: "member",
 					},
 				},

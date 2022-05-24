@@ -10,18 +10,18 @@ exports.createWorkspace = async (req, res, next) => {
 
 		// name check
 		if (name) {
-			const exists = await Workspace.exists({ $and: [{ owner: user._id }, { name: new RegExp(`^${name}$`, "i") }] });
-			if (!exists) {
-				const letters = /^[A-Za-z0-9\s]+$/;
-				name = String(name).replace(/  +/g, " ").trim();
-				const validFirstName = name.match(letters);
-				if (validFirstName) {
+			const letters = /^[A-Za-z0-9\s]+$/;
+			name = String(name).replace(/  +/g, " ").trim();
+			const validName = name.match(letters);
+			if (validName) {
+				const exists = await Workspace.exists({ $and: [{ owner: user._id }, { name: new RegExp(`^${name}$`, "i") }] });
+				if (!exists) {
 					nameOk = true;
 				} else {
-					issue.name = "Workspace name is not valid!";
+					issue.name = "Duplicate workspace name!";
 				}
 			} else {
-				issue.name = "Duplicate workspace name!";
+				issue.name = "Workspace name is not valid!";
 			}
 		} else {
 			issue.name = "Please enter your workspace name!";
@@ -47,7 +47,7 @@ exports.createWorkspace = async (req, res, next) => {
 					members: [
 						{
 							member: user._id,
-							role: "admin",
+							role: "manager",
 						},
 					],
 				});
