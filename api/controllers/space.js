@@ -29,11 +29,14 @@ exports.createSpace = async (req, res, next) => {
 		// name check
 		if (name) {
 			const letters = /^[A-Za-z0-9\s]+$/;
-			name = String(name).replace(/  +/g, " ").trim();
+			name = String(name)
+				.replace(/\r?\n|\r/g, "")
+				.replace(/  +/g, " ")
+				.trim();
 			const validName = name.match(letters);
 			if (validName) {
-				const exists = await Space.exists({ $and: [{ workSpaceRef: isValidObjectId(workspaceId) ? workspaceId : undefined }, { name: new RegExp(`^${name}$`, "i") }] });
-				if (!exists) {
+				const duplicateSpace = await Space.exists({ $and: [{ workSpaceRef: isValidObjectId(workspaceId) ? workspaceId : undefined }, { name: new RegExp(`^${name}$`, "i") }] });
+				if (!duplicateSpace) {
 					nameOk = true;
 				} else {
 					issue.name = "Duplicate space name!";
@@ -47,7 +50,7 @@ exports.createSpace = async (req, res, next) => {
 
 		// color check
 
-		if (String(color)) {
+		if (color) {
 			color = String(color).toLowerCase().trim();
 			color = color.startsWith("#") ? color : `#${color}`;
 			const isValidHexColor = /^#[0-9A-F]{6}$/i.test(color);
@@ -124,6 +127,116 @@ exports.getSpace = async (req, res, next) => {
 			}
 		} else {
 			issue.message = "Please provide workspace id!";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+exports.updateSpace = async (req, res, next) => {
+	let { name, description, color, privacy } = req.body;
+	let { spaceId } = req.params;
+	try {
+		const user = req.user;
+		const issue = {};
+		let spaceIdOk, nameOk, descriptionOk, colorOk, privacyOk;
+
+		// check space id
+		if (spaceId) {
+			if (isValidObjectId(spaceId)) {
+				var spaceExists = await Space.findOne({ _id: spaceId });
+				if (spaceExists) {
+					spaceIdOk = true;
+				} else {
+					issue.spaceId = "Space not found";
+				}
+			} else {
+				issue.spaceId = "Invalid space id!";
+			}
+		} else {
+			issue.spaceId = "Please provide space id!";
+		}
+
+		// name check
+		if (name) {
+			const letters = /^[A-Za-z0-9\s]+$/;
+			name = String(name)
+				.replace(/\r?\n|\r/g, "")
+				.replace(/  +/g, " ")
+				.trim();
+			const validName = name.match(letters);
+			if (validName) {
+				if (spaceExists) {
+					const duplicateSpace = await Space.exists({ $and: [{ workSpaceRef: spaceExists.workSpaceRef }, { _id: { $ne: spaceId } }, { name: new RegExp(`^${name}$`, "i") }] });
+					if (!duplicateSpace) {
+						nameOk = true;
+					} else {
+						issue.name = "Duplicate space name!";
+					}
+				}
+			} else {
+				issue.name = "Space name is not valid!";
+			}
+		} else {
+			nameOk = true;
+		}
+
+		// description check
+		if (description) {
+			description = String(description)
+				.replace(/\r?\n|\r/g, "")
+				.replace(/  +/g, " ")
+				.trim();
+			description = String(description).replace(/  +/g, " ").trim();
+			descriptionOk = true;
+		} else {
+			descriptionOk = true;
+		}
+
+		// color check
+		if (color) {
+			color = String(color).toLowerCase().trim();
+			color = color.startsWith("#") ? color : `#${color}`;
+			const isValidHexColor = /^#[0-9A-F]{6}$/i.test(color);
+			if (isValidHexColor) {
+				colorOk = true;
+			} else {
+				issue.color = "Invalid color!";
+			}
+		} else {
+			colorOk = true;
+		}
+
+		// privacy check
+		if (privacy) {
+			privacy = String(privacy).toLowerCase().trim();
+			if (["public", "private"].includes(privacy)) {
+				privacyOk = true;
+			} else {
+				issue.privacy = "Invalid privacy keyword!";
+			}
+		} else {
+			privacyOk = true;
+		}
+
+		if (spaceIdOk && nameOk && descriptionOk && colorOk && privacyOk) {
+			const updateSpace = await Space.updateOne(
+				{ _id: spaceId },
+				{
+					name,
+					description,
+					privacy,
+					color,
+				}
+			);
+
+			if (updateSpace.matchedCount) {
+				return res.status(201).json({ message: "Successfully updated" });
+			} else {
+				issue.space = "Failed to updated!";
+			}
 		}
 
 		return res.status(400).json({ issue });
