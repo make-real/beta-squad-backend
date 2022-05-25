@@ -64,4 +64,33 @@ function isValidEmail(email) {
 	return validEmail;
 }
 
-module.exports = { sendOtpVia, verifyOtp, isValidEmail };
+async function usernameGenerating(email, forbiddenUsernames) {
+	console.log(this.name);
+	const User = require("../models/User");
+	forbiddenUsernames = forbiddenUsernames || ["account", "accounts", "user", "users", "api"];
+	const targetOfSlice = email.indexOf("@");
+	let username = email.slice(0, targetOfSlice);
+	let usernameExist = await User.findOne({ username });
+	let IsForbiddenUsernames = forbiddenUsernames.includes(username);
+
+	if (usernameExist || IsForbiddenUsernames) {
+		let increment = 1;
+		while (true) {
+			var u = username + increment;
+			usernameExist = await User.findOne({ username: u });
+			IsForbiddenUsernames = forbiddenUsernames.includes(u);
+			console.trace("Looping at 'usernameGenerating' func to generate username");
+
+			if (!usernameExist && !IsForbiddenUsernames) {
+				break;
+			} else {
+				increment++;
+			}
+		}
+		username = u;
+	}
+
+	return username;
+}
+
+module.exports = { sendOtpVia, verifyOtp, isValidEmail, usernameGenerating };

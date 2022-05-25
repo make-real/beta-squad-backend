@@ -6,7 +6,7 @@ const bcrypt = require("bcrypt");
 const User = require("../../models/User");
 const UserSession = require("../../models/UserSession");
 
-const { isValidEmail, sendOtpVia, verifyOtp } = require("../../utils/func");
+const { isValidEmail, sendOtpVia, verifyOtp, usernameGenerating } = require("../../utils/func");
 const { createToken, parseJWT } = require("../../utils/jwt");
 
 /**
@@ -107,6 +107,8 @@ exports.register = async (req, res, next) => {
 				if (isValidEmail(email)) {
 					const emailExist = await User.exists({ email });
 					if (!emailExist) {
+						/* username generating */
+						var username = await usernameGenerating(email);
 						emailOk = true;
 					} else {
 						issue.email = "An account has already associated with the email!";
@@ -160,6 +162,7 @@ exports.register = async (req, res, next) => {
 		if (fullNameOk && emailOk && phoneOk && passwordOk) {
 			const userStructure = new User({
 				fullName,
+				username,
 				email,
 				phone,
 				password,
