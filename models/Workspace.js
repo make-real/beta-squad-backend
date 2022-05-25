@@ -11,7 +11,7 @@ const workspaceSchema = new Schema(
 			ref: "User",
 			required: true,
 		},
-		avatar: {
+		logo: {
 			type: String,
 		},
 	},

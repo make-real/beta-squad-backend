@@ -168,7 +168,7 @@ exports.updateSpace = async (req, res, next) => {
 		// check space id
 		if (spaceId) {
 			if (isValidObjectId(spaceId)) {
-				var spaceExists = await Space.findOne({ _id: spaceId });
+				var spaceExists = await Space.findOne({ _id: spaceId }).select("workSpaceRef");
 				if (spaceExists) {
 					spaceIdOk = true;
 				} else {

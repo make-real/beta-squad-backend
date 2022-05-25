@@ -1,5 +1,5 @@
-const multipart = require("connect-multiparty");
 const userRouter = require("express").Router();
+const multipart = require("connect-multiparty");
 
 const { getUsers, usersProfile, updateProfile } = require("../controllers/user");
 
