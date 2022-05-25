@@ -5,7 +5,6 @@ const { createSpace, getSpace, updateSpace, addMembers, removeMembers, getMember
 spaceRouter.post("/", createSpace);
 spaceRouter.get("/", getSpace);
 spaceRouter.patch("/:spaceId", updateSpace);
-
 spaceRouter.put("/:spaceId/add-members", addMembers);
 spaceRouter.put("/:spaceId/remove-members", removeMembers);
 spaceRouter.get("/:spaceId/members", getMembers);

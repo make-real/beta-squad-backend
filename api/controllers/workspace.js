@@ -1,6 +1,13 @@
 const Workspace = require("../../models/Workspace");
 const Space = require("../../models/Space");
 
+/**
+ * Create a workspace
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
 exports.createWorkspace = async (req, res, next) => {
 	let { name } = req.body;
 	try {
@@ -64,6 +71,14 @@ exports.createWorkspace = async (req, res, next) => {
 		next(err);
 	}
 };
+
+/**
+ * Get workspace list
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
 exports.getWorkspace = async (req, res, next) => {
 	let { limit, skip } = req.query;
 	try {

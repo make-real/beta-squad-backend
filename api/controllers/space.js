@@ -4,6 +4,13 @@ const Workspace = require("../../models/Workspace");
 const Space = require("../../models/Space");
 const User = require("../../models/User");
 
+/**
+ * Create a space
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
 exports.createSpace = async (req, res, next) => {
 	let { workspaceId, name, color, privacy } = req.body;
 	try {
@@ -107,6 +114,13 @@ exports.createSpace = async (req, res, next) => {
 	}
 };
 
+/**
+ * Get spaces list under a workspace
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
 exports.getSpace = async (req, res, next) => {
 	let { workspaceId, limit, skip } = req.query;
 	try {
@@ -136,6 +150,13 @@ exports.getSpace = async (req, res, next) => {
 	}
 };
 
+/**
+ * Update space
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
 exports.updateSpace = async (req, res, next) => {
 	let { name, description, color, privacy } = req.body;
 	let { spaceId } = req.params;
@@ -246,6 +267,13 @@ exports.updateSpace = async (req, res, next) => {
 	}
 };
 
+/**
+ * Add members to a space
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
 exports.addMembers = async (req, res, next) => {
 	let { spaceId } = req.params;
 	let { memberId } = req.body;
@@ -314,6 +342,13 @@ exports.addMembers = async (req, res, next) => {
 	}
 };
 
+/**
+ * Remove members from a space
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
 exports.removeMembers = async (req, res, next) => {
 	let { spaceId } = req.params;
 	let { memberId } = req.body;
@@ -377,6 +412,13 @@ exports.removeMembers = async (req, res, next) => {
 	}
 };
 
+/**
+ * Get members list of a space
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
 exports.getMembers = async (req, res, next) => {
 	let { spaceId } = req.params;
 	let { skip, limit } = req.query;
