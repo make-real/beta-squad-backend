@@ -6,10 +6,21 @@ const workspaceSchema = new Schema(
 			type: String,
 			required: true,
 		},
-		owner: {
-			type: Schema.Types.ObjectId,
-			ref: "User",
-			required: true,
+		teamMembers: {
+			type: [
+				{
+					member: {
+						type: Schema.Types.ObjectId,
+						ref: "User",
+					},
+					role: {
+						type: String,
+						enum: ["owner", "admin", "user"],
+						default: "user",
+					},
+				},
+			],
+			select: false,
 		},
 		logo: {
 			type: String,

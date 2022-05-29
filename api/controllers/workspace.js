@@ -23,7 +23,16 @@ exports.createWorkspace = async (req, res, next) => {
 			name = String(name).replace(/  +/g, " ").trim();
 			const validName = name.match(letters);
 			if (validName) {
-				const exists = await Workspace.exists({ $and: [{ owner: user._id }, { name: new RegExp(`^${name}$`, "i") }] });
+				const exists = await Workspace.exists({
+					$and: [
+						{
+							teamMembers: {
+								$elemMatch: { member: user._id, role: "owner" },
+							},
+						},
+						{ name: new RegExp(`^${name}$`, "i") },
+					],
+				});
 				if (!exists) {
 					nameOk = true;
 				} else {
@@ -40,6 +49,12 @@ exports.createWorkspace = async (req, res, next) => {
 			const workspaceStructure = new Workspace({
 				name,
 				owner: user._id,
+				teamMembers: [
+					{
+						member: user._id,
+						role: "owner",
+					},
+				],
 			});
 
 			const saveWorkspace = await workspaceStructure.save();
@@ -127,7 +142,16 @@ exports.updateWorkspace = async (req, res, next) => {
 			if (isValidObjectId(workspaceId)) {
 				var workspaceExists = await Workspace.exists({ _id: workspaceId });
 				if (workspaceExists) {
-					const doIHaveAccessToUpdate = await Workspace.exists({ $and: [{ _id: workspaceId }, { owner: user._id }] });
+					const doIHaveAccessToUpdate = await Workspace.exists({
+						$and: [
+							{ _id: workspaceId },
+							{
+								teamMembers: {
+									$elemMatch: { member: user._id, role: "owner" },
+								},
+							},
+						],
+					});
 					if (doIHaveAccessToUpdate) {
 						workspaceIdOk = true;
 					} else {
@@ -153,7 +177,17 @@ exports.updateWorkspace = async (req, res, next) => {
 					.trim();
 				const validName = name.match(letters);
 				if (validName) {
-					const duplicateWorkspace = await Workspace.exists({ $and: [{ owner: user._id }, { _id: { $ne: workspaceId } }, { name: new RegExp(`^${name}$`, "i") }] });
+					const duplicateWorkspace = await Workspace.exists({
+						$and: [
+							{ _id: { $ne: workspaceId } },
+							{
+								teamMembers: {
+									$elemMatch: { member: user._id, role: "owner" },
+								},
+							},
+							{ name: new RegExp(`^${name}$`, "i") },
+						],
+					});
 
 					if (!duplicateWorkspace) {
 						nameOk = true;
