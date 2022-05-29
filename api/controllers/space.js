@@ -283,7 +283,7 @@ exports.updateSpace = async (req, res, next) => {
 						}
 					);
 
-					if (updateSpace.matchedCount) {
+					if (updateSpace.modifiedCount) {
 						return res.json({ message: "Successfully updated" });
 					} else {
 						issue.space = "Failed to updated!";

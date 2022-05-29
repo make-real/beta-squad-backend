@@ -37,6 +37,7 @@ const spaceSchema = new Schema(
 			],
 			select: false,
 		},
+		initialSpace: String,
 	},
 	{
 		timestamps: true,
