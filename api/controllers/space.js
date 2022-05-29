@@ -23,7 +23,12 @@ exports.createSpace = async (req, res, next) => {
 			if (isValidObjectId(workspaceId)) {
 				const workspaceExists = await Workspace.exists({ _id: workspaceId });
 				if (workspaceExists) {
-					workspaceIdOk = true;
+					const amIExistsItThisWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": user._id }] });
+					if (amIExistsItThisWorkspace) {
+						workspaceIdOk = true;
+					} else {
+						issue.workspaceId = "You have no access in this workspace!";
+					}
 				} else {
 					issue.workspaceId = "Workspace not found!";
 				}
@@ -168,8 +173,13 @@ exports.updateSpace = async (req, res, next) => {
 		// check space id
 		if (spaceId) {
 			if (isValidObjectId(spaceId)) {
-				var spaceExists = await Space.findOne({ _id: spaceId }).select("workSpaceRef");
+				var spaceExists = await Space.findOne({ _id: spaceId }).select("workSpaceRef").populate({
+					path: "workSpaceRef",
+					select: "_id",
+				});
+
 				if (spaceExists) {
+					var workSpaceId = spaceExists.workSpaceRef && spaceExists.workSpaceRef._id;
 					spaceIdOk = true;
 				} else {
 					issue.spaceId = "Space not found";
@@ -191,7 +201,7 @@ exports.updateSpace = async (req, res, next) => {
 			const validName = name.match(letters);
 			if (validName) {
 				if (spaceExists) {
-					const duplicateSpace = await Space.exists({ $and: [{ workSpaceRef: spaceExists.workSpaceRef }, { _id: { $ne: spaceId } }, { name: new RegExp(`^${name}$`, "i") }] });
+					const duplicateSpace = await Space.exists({ $and: [{ workSpaceRef: workSpaceId }, { _id: { $ne: spaceId } }, { name: new RegExp(`^${name}$`, "i") }] });
 					if (!duplicateSpace) {
 						nameOk = true;
 					} else {
@@ -244,20 +254,45 @@ exports.updateSpace = async (req, res, next) => {
 		}
 
 		if (spaceIdOk && nameOk && descriptionOk && colorOk && privacyOk) {
-			const updateSpace = await Space.updateOne(
-				{ _id: spaceId },
-				{
-					name,
-					description,
-					privacy,
-					color,
-				}
-			);
+			if (workSpaceId) {
+				const iAMAdminOfSpaceOfWorkspace = await Workspace.exists({
+					$and: [
+						{ _id: workSpaceId },
+						{
+							teamMembers: {
+								$elemMatch: {
+									$or: [
+										{ member: user._id, role: "owner" },
+										{ member: user._id, role: "admin" },
+									],
+								},
+							},
+						},
+					],
+				});
+				const iAMManagerOfTheSpace = await Space.exists({ $and: [{ _id: spaceId }, { members: { $elemMatch: { member: user._id, role: "manager" } } }] });
 
-			if (updateSpace.matchedCount) {
-				return res.status(201).json({ message: "Successfully updated" });
+				if (iAMAdminOfSpaceOfWorkspace || iAMManagerOfTheSpace) {
+					const updateSpace = await Space.updateOne(
+						{ _id: spaceId },
+						{
+							name,
+							description,
+							privacy,
+							color,
+						}
+					);
+
+					if (updateSpace.matchedCount) {
+						return res.json({ message: "Successfully updated" });
+					} else {
+						issue.space = "Failed to updated!";
+					}
+				} else {
+					issue.message = "You have no access to perform this operation!";
+				}
 			} else {
-				issue.space = "Failed to updated!";
+				issue.message = "Something is wrong!";
 			}
 		}
 
@@ -284,47 +319,84 @@ exports.addMembers = async (req, res, next) => {
 
 		if (spaceId) {
 			if (isValidObjectId(spaceId)) {
-				const spaceExists = await Space.exists({ _id: spaceId });
+				const spaceExists = await Space.findOne({ _id: spaceId }).select("workSpaceRef").populate({
+					path: "workSpaceRef",
+					select: "_id",
+				});
 				if (spaceExists) {
-					const iAMManager = await Space.exists({ $and: [{ _id: spaceId }, { members: { $elemMatch: { member: user._id, role: "manager" } } }] });
-
-					if (iAMManager) {
-						if (memberId) {
-							if (isValidObjectId(memberId)) {
-								const memberExists = await User.exists({ _id: memberId });
-								if (memberExists) {
-									const alreadyMember = await await Space.exists({ $and: [{ _id: spaceId }, { "members.member": memberId }] });
-									if (!alreadyMember) {
-										const memberPush = await Space.updateOne(
-											{ _id: spaceId },
-											{
-												$push: {
-													members: {
-														member: memberId,
+					if (spaceExists.workSpaceRef) {
+						const workSpaceRef = spaceExists.workSpaceRef._id;
+						const iAMAdminOfSpaceOfWorkspace = await Workspace.exists({
+							$and: [
+								{ _id: workSpaceRef },
+								{
+									teamMembers: {
+										$elemMatch: {
+											$or: [
+												{ member: user._id, role: "owner" },
+												{ member: user._id, role: "admin" },
+											],
+										},
+									},
+								},
+							],
+						});
+						const iAMManagerOfTheSpace = await Space.exists({ $and: [{ _id: spaceId }, { members: { $elemMatch: { member: user._id, role: "manager" } } }] });
+						if (iAMAdminOfSpaceOfWorkspace || iAMManagerOfTheSpace) {
+							if (memberId) {
+								if (isValidObjectId(memberId)) {
+									const memberExists = await User.exists({ _id: memberId });
+									if (memberExists) {
+										const alreadyMember = await await Space.exists({ $and: [{ _id: spaceId }, { "members.member": memberId }] });
+										if (!alreadyMember) {
+											const memberPush = await Space.updateOne(
+												{ _id: spaceId },
+												{
+													$push: {
+														members: {
+															member: memberId,
+														},
 													},
-												},
-											}
-										);
+												}
+											);
 
-										if (memberPush.modifiedCount) {
-											return res.json({ message: "Successfully added the member to the space!" });
+											if (memberPush.modifiedCount) {
+												// also add the member to the Workspace as a Team Member
+												const allReadyExistsInWorkspace = await Workspace.exists({ $and: [{ _id: workSpaceRef }, { "teamMembers.member": memberId }] });
+												if (!allReadyExistsInWorkspace) {
+													await Workspace.updateOne(
+														{ _id: workSpaceRef },
+														{
+															$push: {
+																teamMembers: {
+																	member: memberId,
+																},
+															},
+														}
+													);
+												}
+
+												return res.json({ message: "Successfully added the member to the space!" });
+											} else {
+												issue.message = "Failed to add member!";
+											}
 										} else {
-											issue.message = "Failed to add member!";
+											issue.message = "Already added this member to the space!";
 										}
 									} else {
-										issue.message = "Already added this member to the space!";
+										issue.message = "Member not found!";
 									}
 								} else {
-									issue.message = "Member not found!";
+									issue.message = "Invalid member id!";
 								}
 							} else {
-								issue.message = "Invalid member id!";
+								issue.message = "Please provide member id!";
 							}
 						} else {
-							issue.message = "Please provide member id!";
+							issue.message = "You have no access to perform this operation!";
 						}
 					} else {
-						issue.message = "You have no access to perform this operation!";
+						issue.message = "Something is wrong!";
 					}
 				} else {
 					issue.message = "Space not found";
@@ -359,42 +431,66 @@ exports.removeMembers = async (req, res, next) => {
 
 		if (spaceId) {
 			if (isValidObjectId(spaceId)) {
-				const spaceExists = await Space.exists({ _id: spaceId });
+				const spaceExists = await Space.findOne({ _id: spaceId }).select("workSpaceRef").populate({
+					path: "workSpaceRef",
+					select: "_id",
+				});
 				if (spaceExists) {
-					const iAMManager = await Space.exists({ $and: [{ _id: spaceId }, { members: { $elemMatch: { member: user._id, role: "manager" } } }] });
+					if (spaceExists.workSpaceRef) {
+						const workSpaceRef = spaceExists.workSpaceRef._id;
 
-					if (iAMManager) {
-						if (memberId) {
-							if (isValidObjectId(memberId)) {
-								const memberExistsInSpace = await await Space.exists({ $and: [{ _id: spaceId }, { "members.member": memberId }] });
-								if (memberExistsInSpace) {
-									const memberPush = await Space.updateOne(
-										{ _id: spaceId },
-										{
-											$pull: {
-												members: {
-													member: memberId,
+						const iAMAdminOfSpaceOfWorkspace = await Workspace.exists({
+							$and: [
+								{ _id: workSpaceRef },
+								{
+									teamMembers: {
+										$elemMatch: {
+											$or: [
+												{ member: user._id, role: "owner" },
+												{ member: user._id, role: "admin" },
+											],
+										},
+									},
+								},
+							],
+						});
+
+						const iAMManagerOfTheSpace = await Space.exists({ $and: [{ _id: spaceId }, { members: { $elemMatch: { member: user._id, role: "manager" } } }] });
+						if (iAMAdminOfSpaceOfWorkspace || iAMManagerOfTheSpace) {
+							if (memberId) {
+								if (isValidObjectId(memberId)) {
+									const memberExistsInSpace = await await Space.exists({ $and: [{ _id: spaceId }, { "members.member": memberId }] });
+									if (memberExistsInSpace) {
+										const memberPush = await Space.updateOne(
+											{ _id: spaceId },
+											{
+												$pull: {
+													members: {
+														member: memberId,
+													},
 												},
-											},
-										}
-									);
+											}
+										);
 
-									if (memberPush.modifiedCount) {
-										return res.json({ message: "Successfully removed the member from the space!" });
+										if (memberPush.modifiedCount) {
+											return res.json({ message: "Successfully removed the member from the space!" });
+										} else {
+											issue.message = "Failed to add member!";
+										}
 									} else {
-										issue.message = "Failed to add member!";
+										issue.message = "Already removed this member from the space!";
 									}
 								} else {
-									issue.message = "Already removed this member from the space!";
+									issue.message = "Invalid member id!";
 								}
 							} else {
-								issue.message = "Invalid member id!";
+								issue.message = "Please provide member id!";
 							}
 						} else {
-							issue.message = "Please provide member id!";
+							issue.message = "You have no access to perform this operation!";
 						}
 					} else {
-						issue.message = "You have no access to perform this operation!";
+						issue.message = "Something is wrong!";
 					}
 				} else {
 					issue.message = "Space not found";

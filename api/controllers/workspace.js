@@ -103,17 +103,7 @@ exports.getWorkspace = async (req, res, next) => {
 		limit = parseInt(limit) || 10;
 		skip = parseInt(skip) || 0;
 
-		const getSpaces = await Space.find({ "members.member": user._id }).select("workSpaceRef");
-
-		const workspaceIds = [];
-		for (const space of getSpaces) {
-			workspaceIds.push(space.workSpaceRef);
-		}
-
-		const getWorkspace = await Workspace.find({ _id: { $in: workspaceIds } })
-			.sort({ createdAt: -1 })
-			.skip(skip)
-			.limit(limit);
+		const getWorkspace = await Workspace.find({ "teamMembers.member": user._id }).sort({ createdAt: -1 }).skip(skip).limit(limit);
 
 		return res.send({ workspaces: getWorkspace });
 	} catch (err) {
@@ -147,7 +137,12 @@ exports.updateWorkspace = async (req, res, next) => {
 							{ _id: workspaceId },
 							{
 								teamMembers: {
-									$elemMatch: { member: user._id, role: "owner" },
+									$elemMatch: {
+										$or: [
+											{ member: user._id, role: "owner" },
+											{ member: user._id, role: "admin" },
+										],
+									},
 								},
 							},
 						],
@@ -155,7 +150,7 @@ exports.updateWorkspace = async (req, res, next) => {
 					if (doIHaveAccessToUpdate) {
 						workspaceIdOk = true;
 					} else {
-						issue.workspaceId = "Only owner can update the Workspace!";
+						issue.workspaceId = "You can't update the Workspace!";
 					}
 				} else {
 					issue.workspaceId = "Workspace not found";
