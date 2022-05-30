@@ -63,12 +63,10 @@ exports.usersProfile = async (req, res, next) => {
 		} else {
 			req.user.emailVerified = undefined;
 			req.user.phoneVerified = undefined;
-			res.json({ user: req.user });
+			return res.json({ user: req.user });
 		}
 
-		if (!req.headersSent) {
-			res.status(400).json({ issue });
-		}
+		return res.status(400).json({ issue });
 	} catch (err) {
 		next(err);
 	}
