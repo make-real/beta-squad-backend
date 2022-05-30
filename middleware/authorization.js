@@ -5,7 +5,7 @@ const { parseJWT } = require("../utils/jwt");
 exports.userAuthorization = async (req, res, next) => {
 	try {
 		const issue = {};
-		let token = req.headers.authorization;
+		let token = req.socketAuthToken ? `Bearer ${req.socketAuthToken}` : req.headers.authorization;
 		if (token) {
 			token = token.split(" ")[1];
 			const jwt_payload = parseJWT(token);
@@ -44,6 +44,10 @@ exports.userAuthorization = async (req, res, next) => {
 			issue.message = "Please provide token in - headers.authorization";
 		}
 
+		if (req.socketAuthToken) {
+			console.log(`Socket: ${issue.message}`);
+			return next(new Error("invalid"));
+		}
 		return res.status(401).json({ issue });
 	} catch (err) {
 		next(err);
