@@ -1,8 +1,8 @@
 const { isValidObjectId } = require("mongoose");
 
-const Workspace = require("../../models/Workspace");
-const Space = require("../../models/Space");
-const User = require("../../models/User");
+const Workspace = require("../../../models/Workspace");
+const Space = require("../../../models/Space");
+const User = require("../../../models/User");
 
 /**
  * Create a space

@@ -93,4 +93,19 @@ async function usernameGenerating(email, forbiddenUsernames) {
 	return username;
 }
 
-module.exports = { sendOtpVia, verifyOtp, isValidEmail, usernameGenerating };
+function splitSpecificParts(str, startChar, endChar) {
+	const targetParts = [];
+	const splitWithStartChar = str.split(startChar);
+
+	for (let arrItem of splitWithStartChar) {
+		if (arrItem.indexOf(endChar) > -1) {
+			const splitEndIndex = arrItem.indexOf(endChar);
+			const item = arrItem.substring(0, splitEndIndex);
+			targetParts.push(item);
+		}
+	}
+
+	return targetParts;
+}
+
+module.exports = { sendOtpVia, verifyOtp, isValidEmail, usernameGenerating, splitSpecificParts };

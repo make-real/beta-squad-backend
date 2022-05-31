@@ -22,6 +22,48 @@ const imageCheck = (image) => {
 	return { status, message };
 };
 
+async function multipleFilesCHeckAndUpload(files) {
+	const filesUrl = [];
+	let errorMessage;
+	if (files) {
+		if (files.length === undefined) {
+			files = [files];
+		} else {
+			files = files;
+		}
+
+		// check files
+		let filesOk;
+		for (const file of files) {
+			if (file.size > 0) {
+				if (!file.type) {
+					break;
+				}
+			} else {
+				break;
+			}
+			filesOk = true;
+		}
+
+		// files upload
+		if (filesOk) {
+			for (const file of files) {
+				const uploadResult = await upload(file.path);
+				if (uploadResult.secure_url) {
+					filesUrl.push(uploadResult.secure_url);
+				} else {
+					errorMessage = uploadResult.message;
+					break;
+				}
+			}
+		} else {
+			errorMessage = "There is an error with upload files!";
+		}
+	}
+
+	return { filesUrl, errorMessage };
+}
+
 /**
  * Upload a file
  *
@@ -33,11 +75,11 @@ const upload = async (filePath, width, height) => {
 		if (width && height) {
 			return await cloudinary.uploader.upload(filePath, { width, height });
 		} else {
-			return await cloudinary.uploader.upload(filePath);
+			return await cloudinary.uploader.upload(filePath, { resource_type: "raw" });
 		}
 	} catch (err) {
 		return { message: err.message || "Failed to upload file" };
 	}
 };
 
-module.exports = { imageCheck, upload };
+module.exports = { imageCheck, multipleFilesCHeckAndUpload, upload };
