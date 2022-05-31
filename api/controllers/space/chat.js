@@ -3,6 +3,7 @@ const Space = require("../../../models/Space");
 const SpaceChat = require("../../../models/SpaceChat");
 const { splitSpecificParts } = require("../../../utils/func");
 const { multipleFilesCHeckAndUpload } = require("../../../utils/file");
+const User = require("../../../models/User");
 
 exports.sendMessage = async (req, res, next) => {
 	let { textMessage, replayOf } = req.body;
@@ -18,8 +19,18 @@ exports.sendMessage = async (req, res, next) => {
 		// text message check
 		if (textMessage) {
 			textMessage = String(textMessage).replace(/  +/g, " ").trim();
+			const splitIds = splitSpecificParts(textMessage, "{{", "}}");
+			const ids = [];
+			for (const id of splitIds) {
+				if (isValidObjectId(id)) {
+					ids.push(id);
+				}
+			}
+			const validMentionedUsers = await User.find({ _id: { $in: ids } }).select("_id");
+			for (const user of validMentionedUsers) {
+				mentionedUsers.push(user._id);
+			}
 			textMessageOk = true;
-			mentionedUsers = splitSpecificParts(textMessage, "{{", "}}");
 		} else {
 			textMessageOk = true;
 		}
