@@ -44,6 +44,7 @@ const spaceChatSchema = new Schema(
 		deleted: {
 			type: Boolean,
 			default: false,
+			select: false,
 		},
 		reactions: {
 			type: [
@@ -59,7 +60,6 @@ const spaceChatSchema = new Schema(
 					},
 				},
 			],
-			// select: false,
 		},
 		editedAt: Date,
 	},

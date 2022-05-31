@@ -128,3 +128,71 @@ exports.sendMessage = async (req, res, next) => {
 		next(err);
 	}
 };
+
+exports.getMessage = async (req, res, next) => {
+	let { spaceId } = req.params;
+	let { skip, limit } = req.query;
+	try {
+		limit = parseInt(limit) || 20;
+		skip = parseInt(skip) || 0;
+		const user = req.user;
+		const issue = {};
+
+		if (isValidObjectId(spaceId)) {
+			const spaceExists = await Space.exists({ _id: spaceId });
+			if (spaceExists) {
+				const doIHaveAccessToSendMessage = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
+				if (doIHaveAccessToSendMessage) {
+					const getTheMessages = await SpaceChat.find({ $and: [{ to: spaceId }, { deleted: false }] })
+						.sort({ createdAt: -1 })
+						.populate([
+							{
+								path: "sender",
+								select: "fullName username avatar",
+							},
+							{
+								path: "replayOf",
+								select: "content editedAt createdAt",
+								populate: [
+									{
+										path: "sender",
+										select: "fullName username avatar",
+									},
+									{
+										path: "content.mentionedUsers",
+										select: "fullName username avatar",
+									},
+								],
+							},
+							{
+								path: "content.mentionedUsers",
+								select: "fullName username avatar",
+							},
+							{
+								path: "seen",
+								select: "fullName username avatar",
+							},
+							{
+								path: "reactions.reactor",
+								select: "fullName username avatar",
+							},
+						])
+						.skip(skip)
+						.limit(limit);
+
+					return res.json({ messages: getTheMessages });
+				} else {
+					issue.spaceId = "You are not a member of the space!!";
+				}
+			} else {
+				issue.spaceId = "Not found space";
+			}
+		} else {
+			issue.spaceId = "Invalid space id";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
