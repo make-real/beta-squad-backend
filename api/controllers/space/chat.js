@@ -439,3 +439,103 @@ exports.messageDelete = async (req, res, next) => {
 		next(err);
 	}
 };
+
+exports.messageReaction = async (req, res, next) => {
+	let { spaceId, messageId } = req.params;
+	let { reaction } = req.body;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		let idOk, reactionOk;
+
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidMessageId = isValidObjectId(messageId);
+		if (isValidSpaceId && isValidMessageId) {
+			const messageExists = await SpaceChat.findOne({ _id: messageId }).select("to");
+			if (messageExists) {
+				const doAccessToReaction = await Space.exists({ $and: [{ _id: messageExists.to }, { "members.member": user._id }] });
+				if (doAccessToReaction) {
+					const isDeleted = await SpaceChat.exists({ $and: [{ _id: messageId }, { deleted: true }] });
+					if (!isDeleted) {
+						idOk = true;
+					} else {
+						issue.message = "The message is currently deleted!";
+					}
+				} else {
+					issue.message = "Unable to perform the operation!";
+				}
+			} else {
+				issue.message = "Not found message!";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.message = "Invalid space id";
+			} else if (!isValidMessageId) {
+				issue.message = "Invalid message id";
+			}
+		}
+
+		if (idOk) {
+			// check the reaction
+			if (reaction) {
+				reaction = String(reaction).replace(/  +/g, "").trim();
+				reactionOk = true;
+			} else {
+				issue.message = "Please your reaction!";
+			}
+		}
+
+		if (reactionOk) {
+			const isAlreadyReacted = await SpaceChat.exists({
+				$and: [
+					{ _id: messageId },
+					{
+						reactions: {
+							$elemMatch: { reactor: user._id },
+						},
+					},
+				],
+			});
+
+			let updateReaction;
+			if (isAlreadyReacted) {
+				// Update reaction
+				updateReaction = await SpaceChat.updateOne(
+					{
+						$and: [{ _id: messageId }, { "reactions.reactor": user._id }],
+					},
+					{ $set: { "reactions.$.reaction": reaction } }
+				);
+			} else {
+				// Push reaction
+				updateReaction = await SpaceChat.updateOne(
+					{ _id: messageId },
+					{
+						$push: {
+							reactions: {
+								reactor: user._id,
+								reaction,
+							},
+						},
+					}
+				);
+			}
+
+			if (updateReaction.modifiedCount) {
+				const getReactions = await SpaceChat.findOne({ _id: messageId }).select("reactions").populate({
+					path: "reactions.reactor",
+					select: "fullName username avatar",
+				});
+				return res.json({ reactions: getReactions.reactions });
+			} else {
+				issue.message = "Failed to react!";
+			}
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
