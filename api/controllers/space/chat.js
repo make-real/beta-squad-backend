@@ -207,3 +207,58 @@ exports.getMessage = async (req, res, next) => {
 		next(err);
 	}
 };
+
+exports.memberListToMention = async (req, res, next) => {
+	let { spaceId } = req.params;
+	let { skip, limit } = req.query;
+	try {
+		limit = parseInt(limit) || 100;
+		skip = parseInt(skip) || 0;
+		const user = req.user;
+		const issue = {};
+
+		if (isValidObjectId(spaceId)) {
+			const spaceExists = await Space.exists({ _id: spaceId });
+			if (spaceExists) {
+				const doIHaveAccessToSendMessage = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
+				if (doIHaveAccessToSendMessage) {
+					const getMemberOfSpace = await Space.findOne(
+						{ _id: spaceId },
+						{
+							members: { $slice: [skip, limit] },
+						}
+					)
+						.select("+members -name -description -privacy -color -workSpaceRef")
+						.populate({
+							path: "members",
+							populate: {
+								path: "member",
+								select: "fullName username avatar",
+							},
+						});
+
+					const spaceMembers = getMemberOfSpace.members;
+					const members = [];
+					for (const single of spaceMembers) {
+						if (single.member) {
+							const member = single.member;
+							members.push(member);
+						}
+					}
+
+					return res.json({ users: members });
+				} else {
+					issue.spaceId = "You are not a member of the space!!";
+				}
+			} else {
+				issue.spaceId = "Not found space!";
+			}
+		} else {
+			issue.spaceId = "Invalid space id";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
