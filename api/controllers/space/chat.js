@@ -38,7 +38,8 @@ exports.sendMessage = async (req, res, next) => {
 		}
 
 		// spaceId check
-		if (isValidObjectId(spaceId)) {
+		const isValidSpaceId = isValidObjectId(spaceId);
+		if (isValidSpaceId) {
 			const spaceExists = await Space.exists({ _id: spaceId });
 			if (spaceExists) {
 				const doIHaveAccessToSendMessage = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
@@ -56,12 +57,14 @@ exports.sendMessage = async (req, res, next) => {
 
 		// replayOf id check
 		if (replayOf) {
-			if (isValidObjectId(replayOf)) {
-				const spaceChatExists = await SpaceChat.exists({ $and: [{ _id: replayOf }, { to: spaceId }] });
-				replayOfOk = true;
-				replayOf = spaceChatExists ? replayOf : undefined;
-			} else {
-				issue.replayOf = "Invalid replayOf id";
+			if (isValidSpaceId) {
+				if (isValidObjectId(replayOf)) {
+					const spaceChatExists = await SpaceChat.exists({ $and: [{ _id: replayOf }, { to: spaceId }] });
+					replayOfOk = true;
+					replayOf = spaceChatExists ? replayOf : undefined;
+				} else {
+					issue.replayOf = "Invalid replayOf id";
+				}
 			}
 		} else {
 			replayOfOk = true;
@@ -132,11 +135,27 @@ exports.sendMessage = async (req, res, next) => {
 					},
 				]);
 
-				return res.status(201).json({ message: getTheMessage });
+				res.status(201).json({ message: getTheMessage });
+
+				// Operation for unseen message update as seen
+				SpaceChat.updateMany(
+					{
+						$and: [
+							{ to: spaceId },
+							{
+								$nor: [{ sender: user._id }, { seen: user._id }],
+							},
+						],
+					},
+					{ $push: { seen: [user._id] } }
+				).then();
+				// Operation End
 			}
 		}
 
-		return res.status(400).json({ issue });
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
 	} catch (err) {
 		next(err);
 	}
@@ -193,7 +212,21 @@ exports.getMessage = async (req, res, next) => {
 						.skip(skip)
 						.limit(limit);
 
-					return res.json({ messages: getTheMessages });
+					res.json({ messages: getTheMessages });
+
+					// Operation for unseen message update as seen
+					SpaceChat.updateMany(
+						{
+							$and: [
+								{ to: spaceId },
+								{
+									$nor: [{ sender: user._id }, { seen: user._id }],
+								},
+							],
+						},
+						{ $push: { seen: [user._id] } }
+					).then();
+					// Operation End
 				} else {
 					issue.spaceId = "You are not a member of the space!!";
 				}
@@ -204,7 +237,9 @@ exports.getMessage = async (req, res, next) => {
 			issue.spaceId = "Invalid space id";
 		}
 
-		return res.status(400).json({ issue });
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
 	} catch (err) {
 		next(err);
 	}
