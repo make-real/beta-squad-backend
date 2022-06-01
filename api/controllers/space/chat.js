@@ -26,9 +26,11 @@ exports.sendMessage = async (req, res, next) => {
 					ids.push(id);
 				}
 			}
-			const validMentionedUsers = await User.find({ _id: { $in: ids } }).select("_id");
-			for (const user of validMentionedUsers) {
-				mentionedUsers.push(user._id);
+			if (ids.length > 0) {
+				const validMentionedUsers = await User.find({ _id: { $in: ids } }).select("_id");
+				for (const user of validMentionedUsers) {
+					mentionedUsers.push(user._id);
+				}
 			}
 			textMessageOk = true;
 		} else {
@@ -152,8 +154,8 @@ exports.getMessage = async (req, res, next) => {
 		if (isValidObjectId(spaceId)) {
 			const spaceExists = await Space.exists({ _id: spaceId });
 			if (spaceExists) {
-				const doIHaveAccessToSendMessage = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
-				if (doIHaveAccessToSendMessage) {
+				const doIHaveAccess = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
+				if (doIHaveAccess) {
 					const getTheMessages = await SpaceChat.find({ $and: [{ to: spaceId }, { deleted: false }] })
 						.sort({ createdAt: -1 })
 						.populate([
@@ -220,8 +222,8 @@ exports.memberListToMention = async (req, res, next) => {
 		if (isValidObjectId(spaceId)) {
 			const spaceExists = await Space.exists({ _id: spaceId });
 			if (spaceExists) {
-				const doIHaveAccessToSendMessage = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
-				if (doIHaveAccessToSendMessage) {
+				const doIHaveAccess = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
+				if (doIHaveAccess) {
 					const getMemberOfSpace = await Space.findOne(
 						{ _id: spaceId },
 						{
@@ -255,6 +257,123 @@ exports.memberListToMention = async (req, res, next) => {
 			}
 		} else {
 			issue.spaceId = "Invalid space id";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+exports.messageEdit = async (req, res, next) => {
+	let { spaceId, messageId } = req.params;
+	let { updateMessage } = req.body;
+	let mentionedUsers = [];
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		let idOk, updateMessageOk;
+
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidMessageId = isValidObjectId(messageId);
+		if (isValidSpaceId && isValidMessageId) {
+			const messageExists = await SpaceChat.findOne({ _id: messageId }).select("to");
+			if (messageExists) {
+				const doAccessToEdit = await Space.exists({ $and: [{ _id: messageExists.to }, { "members.member": user._id }] });
+				const doAccessToEdit1 = await SpaceChat.exists({ $and: [{ _id: messageId }, { sender: user._id }] });
+				if (doAccessToEdit && doAccessToEdit1) {
+					const isDeleted = await SpaceChat.exists({ $and: [{ _id: messageId }, { deleted: true }] });
+					if (!isDeleted) {
+						idOk = true;
+					} else {
+						issue.message = "The message is currently deleted!";
+					}
+				} else {
+					issue.message = "Unable to perform the operation!";
+				}
+			} else {
+				issue.message = "Not found message!";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.message = "Invalid space id";
+			} else if (!isValidMessageId) {
+				issue.message = "Invalid message id";
+			}
+		}
+
+		if (idOk) {
+			// text message check
+			if (updateMessage) {
+				updateMessage = String(updateMessage).replace(/  +/g, " ").trim();
+				const splitIds = splitSpecificParts(updateMessage, "{{", "}}");
+				const ids = [];
+				for (const id of splitIds) {
+					if (isValidObjectId(id)) {
+						ids.push(id);
+					}
+				}
+				if (ids.length > 0) {
+					const validMentionedUsers = await User.find({ _id: { $in: ids } }).select("_id");
+					for (const user of validMentionedUsers) {
+						mentionedUsers.push(user._id);
+					}
+				}
+				updateMessageOk = true;
+			} else {
+				issue.message = "Please provide your updated message!";
+			}
+		}
+
+		if (updateMessageOk) {
+			const messageUpdate = await SpaceChat.updateOne(
+				{ _id: messageId },
+				{
+					"content.text": updateMessage,
+					"content.mentionedUsers": mentionedUsers,
+					editedAt: Date.now(),
+				}
+			);
+
+			if (messageUpdate.modifiedCount) {
+				const getEditedMessage = await SpaceChat.findOne({ _id: messageId }).populate([
+					{
+						path: "sender",
+						select: "fullName username avatar",
+					},
+					{
+						path: "replayOf",
+						select: "content editedAt createdAt",
+						populate: [
+							{
+								path: "sender",
+								select: "fullName username avatar",
+							},
+							{
+								path: "content.mentionedUsers",
+								select: "fullName username avatar",
+							},
+						],
+					},
+					{
+						path: "content.mentionedUsers",
+						select: "fullName username avatar",
+					},
+					{
+						path: "seen",
+						select: "fullName username avatar",
+					},
+					{
+						path: "reactions.reactor",
+						select: "fullName username avatar",
+					},
+				]);
+				return res.json({ editedMessage: getEditedMessage });
+			} else {
+				issue.message = "Failed to edit!";
+			}
 		}
 
 		return res.status(400).json({ issue });
