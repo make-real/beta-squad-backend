@@ -381,3 +381,61 @@ exports.messageEdit = async (req, res, next) => {
 		next(err);
 	}
 };
+
+exports.messageDelete = async (req, res, next) => {
+	let { spaceId, messageId } = req.params;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		let idOk;
+
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidMessageId = isValidObjectId(messageId);
+		if (isValidSpaceId && isValidMessageId) {
+			const messageExists = await SpaceChat.findOne({ _id: messageId }).select("to");
+			if (messageExists) {
+				const doAccessToDelete = await Space.exists({ $and: [{ _id: messageExists.to }, { "members.member": user._id }] });
+				const doAccessToDelete1 = await SpaceChat.exists({ $and: [{ _id: messageId }, { sender: user._id }] });
+				if (doAccessToDelete && doAccessToDelete1) {
+					const isDeleted = await SpaceChat.exists({ $and: [{ _id: messageId }, { deleted: true }] });
+					if (!isDeleted) {
+						idOk = true;
+					} else {
+						issue.message = "The message is already deleted!";
+					}
+				} else {
+					issue.message = "Unable to perform the operation!";
+				}
+			} else {
+				issue.message = "Not found message!";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.message = "Invalid space id";
+			} else if (!isValidMessageId) {
+				issue.message = "Invalid message id";
+			}
+		}
+
+		if (idOk) {
+			const deleteMessage = await SpaceChat.updateOne(
+				{ _id: messageId },
+				{
+					deleted: true,
+				}
+			);
+
+			if (deleteMessage.modifiedCount) {
+				return res.json({ message: "Successfully deleted the message!" });
+			} else {
+				issue.message = "Failed to delete!";
+			}
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
