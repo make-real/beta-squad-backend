@@ -1,9 +1,11 @@
 const { isValidObjectId } = require("mongoose");
-const Workspace = require("../../models/Workspace");
-const Space = require("../../models/Space");
 const { imageCheck, upload } = require("../../utils/file");
 const { isValidEmail } = require("../../utils/func");
 const User = require("../../models/User");
+const Workspace = require("../../models/Workspace");
+const Space = require("../../models/Space");
+const Card = require("../../models/Card");
+const Tag = require("../../models/Tag");
 
 /**
  * Create a workspace
@@ -108,7 +110,7 @@ exports.getWorkspace = async (req, res, next) => {
 
 		const getWorkspace = await Workspace.find({ "teamMembers.member": user._id }).sort({ createdAt: -1 }).skip(skip).limit(limit);
 
-		return res.send({ workspaces: getWorkspace });
+		return res.json({ workspaces: getWorkspace });
 	} catch (err) {
 		next(err);
 	}
@@ -338,6 +340,353 @@ exports.addTeamMembers = async (req, res, next) => {
 				}
 			} else {
 				issue.message = "Invalid workspace id!";
+			}
+		} else {
+			issue.message = "Please provide workspace id!";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
+ * TAGS CRUD ===============================================
+ * =========================================================
+ * =========================================================
+ * =========================================================
+ * =========================================================
+ */
+
+/**
+ * Create tags under a workspace
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.createTags = async (req, res, next) => {
+	let { workspaceId } = req.params;
+	let { name, color } = req.body;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		let nameOk, colorOk;
+
+		// Tag name check
+		if (name) {
+			const letters = /^[A-Za-z\s]+$/; // Name char validation
+			name = String(name)
+				.replace(/\r\n/g, " ")
+				.replace(/[\r\n]/g, " ")
+				.replace(/  +/g, " ")
+				.trim();
+			const validFirstName = name.match(letters);
+			if (validFirstName) {
+				nameOk = true;
+			} else {
+				issue.message = "Tag name is not valid!";
+			}
+		} else {
+			issue.message = "Please provide tag name!";
+		}
+
+		// color check
+		if (color) {
+			color = String(color).toLowerCase().trim();
+			color = color.startsWith("#") ? color : `#${color}`;
+			const isValidHexColor = /^#[0-9A-F]{6}$/i.test(color);
+			if (isValidHexColor) {
+				colorOk = true;
+			} else {
+				issue.color = "Invalid color hex code!";
+			}
+		} else {
+			color = undefined;
+			colorOk = true;
+		}
+
+		if (nameOk && colorOk) {
+			if (workspaceId) {
+				if (isValidObjectId(workspaceId)) {
+					const workspaceExists = await Workspace.exists({ _id: workspaceId });
+					if (workspaceExists) {
+						const doIHaveAccessToCreateTag = await Workspace.exists({
+							$and: [
+								{ _id: workspaceId },
+								{
+									"teamMembers.member": user._id,
+								},
+							],
+						});
+						if (doIHaveAccessToCreateTag) {
+							const duplicateTag = await Tag.exists({ $and: [{ workSpaceRef: workspaceId }, { name: new RegExp(`^${name}$`, "i") }] });
+							if (!duplicateTag) {
+								const tagStructure = new Tag({
+									name,
+									color,
+									workSpaceRef: workspaceId,
+								});
+
+								const createTag = await tagStructure.save();
+
+								return res.status(201).json({ tag: createTag });
+							} else {
+								issue.message = "Do not allow duplicate tags in the same workspace!";
+							}
+						} else {
+							issue.message = "You are not a team member of the workplace!";
+						}
+					} else {
+						issue.message = "Workspace not found";
+					}
+				} else {
+					issue.message = "Invalid workspace id!";
+				}
+			} else {
+				issue.message = "Please provide workspace id!";
+			}
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
+ * Get tags of a workspace
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.getTags = async (req, res, next) => {
+	let { workspaceId } = req.params;
+
+	let { limit, skip, countCards } = req.query;
+	try {
+		limit = parseInt(limit) || 30;
+		skip = parseInt(skip) || 0;
+		const user = req.user;
+		const issue = {};
+
+		if (workspaceId) {
+			if (isValidObjectId(workspaceId)) {
+				const workspaceExists = await Workspace.exists({ _id: workspaceId });
+				if (workspaceExists) {
+					const doIHaveAccessToGetTag = await Workspace.exists({
+						$and: [
+							{ _id: workspaceId },
+							{
+								"teamMembers.member": user._id,
+							},
+						],
+					});
+					if (doIHaveAccessToGetTag) {
+						let getTags = await Tag.find({ workSpaceRef: workspaceId }).select("name color").sort({ createdAt: -1 }).skip(skip).limit(limit);
+
+						if (countCards) {
+							getTags = JSON.parse(JSON.stringify(getTags));
+							for (const tag of getTags) {
+								tag.countedCards = await Card.countDocuments({ tags: tag._id });
+							}
+						}
+
+						return res.json({ tags: getTags });
+					} else {
+						issue.message = "You are not a team member of the workplace!";
+					}
+				} else {
+					issue.message = "Workspace not found";
+				}
+			} else {
+				issue.message = "Invalid workspace id!";
+			}
+		} else {
+			issue.message = "Please provide workspace id!";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
+ * Edit a tags
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.editTags = async (req, res, next) => {
+	let { workspaceId, tagId } = req.params;
+	let { name, color } = req.body;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		let nameOk, colorOk;
+
+		// Tag name check
+		if (name) {
+			const letters = /^[A-Za-z\s]+$/; // Name char validation
+			name = String(name)
+				.replace(/\r\n/g, " ")
+				.replace(/[\r\n]/g, " ")
+				.replace(/  +/g, " ")
+				.trim();
+			const validFirstName = name.match(letters);
+			if (validFirstName) {
+				nameOk = true;
+			} else {
+				issue.message = "Tag name is not valid!";
+			}
+		} else {
+			name = undefined;
+			nameOk = true;
+		}
+
+		// color check
+		if (color) {
+			color = String(color).toLowerCase().trim();
+			color = color.startsWith("#") ? color : `#${color}`;
+			const isValidHexColor = /^#[0-9A-F]{6}$/i.test(color);
+			if (isValidHexColor) {
+				colorOk = true;
+			} else {
+				issue.color = "Invalid color hex code!";
+			}
+		} else {
+			color = undefined;
+			colorOk = true;
+		}
+
+		if (nameOk && colorOk) {
+			if (workspaceId) {
+				const isValidWorkspaceId = isValidObjectId(workspaceId);
+				const isValidTagId = isValidObjectId(tagId);
+				if (isValidWorkspaceId && isValidTagId) {
+					const workspaceExists = await Workspace.exists({ _id: workspaceId });
+					if (workspaceExists) {
+						const doIHaveAccessToUpdateTag = await Workspace.exists({
+							$and: [
+								{ _id: workspaceId },
+								{
+									"teamMembers.member": user._id,
+								},
+							],
+						});
+						if (doIHaveAccessToUpdateTag) {
+							const tagExists = await Tag.exists({ _id: tagId });
+							if (tagExists) {
+								const tagExistsInWorkspace = await Tag.exists({ $and: [{ _id: tagId }, { workSpaceRef: workspaceId }] });
+								if (tagExistsInWorkspace) {
+									const duplicateTag = await Tag.exists({ $and: [{ _id: { $ne: tagId } }, { workSpaceRef: workspaceId }, { name: new RegExp(`^${name}$`, "i") }] });
+									if (!duplicateTag) {
+										const updateTag = await Tag.updateOne({ _id: tagId }, { name, color });
+
+										if (updateTag.modifiedCount) {
+											return res.json({ message: "Successfully updated the tag!" });
+										} else {
+											issue.message = "Failed to update the tag!";
+										}
+									} else {
+										issue.message = "Do not allow duplicate tags in the same workspace!";
+									}
+								} else {
+									issue.message = "Something is wrong!";
+								}
+							} else {
+								issue.message = "Tag not found!";
+							}
+						} else {
+							issue.message = "You are not a team member of the workplace!";
+						}
+					} else {
+						issue.message = "Workspace not found";
+					}
+				} else {
+					if (!isValidWorkspaceId) {
+						issue.message = "Invalid workspace id!";
+					} else if (!isValidTagId) {
+						issue.message = "Invalid tag id!";
+					}
+				}
+			} else {
+				issue.message = "Please provide workspace id!";
+			}
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
+ * Delete a tags
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.deleteTags = async (req, res, next) => {
+	let { workspaceId, tagId } = req.params;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		if (workspaceId) {
+			const isValidWorkspaceId = isValidObjectId(workspaceId);
+			const isValidTagId = isValidObjectId(tagId);
+			if (isValidWorkspaceId && isValidTagId) {
+				const workspaceExists = await Workspace.exists({ _id: workspaceId });
+				if (workspaceExists) {
+					const doIHaveAccessToDeleteTag = await Workspace.exists({
+						$and: [
+							{ _id: workspaceId },
+							{
+								"teamMembers.member": user._id,
+							},
+						],
+					});
+					if (doIHaveAccessToDeleteTag) {
+						const tagExists = await Tag.exists({ _id: tagId });
+						if (tagExists) {
+							const tagExistsInWorkspace = await Tag.exists({ $and: [{ _id: tagId }, { workSpaceRef: workspaceId }] });
+							if (tagExistsInWorkspace) {
+								const deleteTag = await Tag.deleteOne({ _id: tagId });
+
+								if (deleteTag.deletedCount) {
+									return res.json({ message: "Successfully deleted the tag!" });
+								} else {
+									issue.message = "Failed to delete the tag!";
+								}
+							} else {
+								issue.message = "Something is wrong!";
+							}
+						} else {
+							issue.message = "Already deleted the tag!";
+						}
+					} else {
+						issue.message = "You are not a team member of the workplace!";
+					}
+				} else {
+					issue.message = "Workspace not found";
+				}
+			} else {
+				if (!isValidWorkspaceId) {
+					issue.message = "Invalid workspace id!";
+				} else if (!isValidTagId) {
+					issue.message = "Invalid tag id!";
+				}
 			}
 		} else {
 			issue.message = "Please provide workspace id!";

@@ -70,9 +70,10 @@ exports.createSpace = async (req, res, next) => {
 			if (isValidHexColor) {
 				colorOk = true;
 			} else {
-				issue.color = "Invalid color!";
+				issue.color = "Invalid color hex code!";
 			}
 		} else {
+			color = undefined;
 			colorOk = true;
 		}
 
@@ -85,6 +86,7 @@ exports.createSpace = async (req, res, next) => {
 				issue.privacy = "Invalid privacy keyword!";
 			}
 		} else {
+			privacy = undefined;
 			privacyOk = true;
 		}
 
@@ -141,7 +143,7 @@ exports.getSpace = async (req, res, next) => {
 					.skip(skip)
 					.limit(limit);
 
-				return res.send({ spaces: getSpace });
+				return res.json({ spaces: getSpace });
 			} else {
 				issue.message = "Invalid workspace id!";
 			}
@@ -235,7 +237,7 @@ exports.updateSpace = async (req, res, next) => {
 			if (isValidHexColor) {
 				colorOk = true;
 			} else {
-				issue.color = "Invalid color!";
+				issue.color = "Invalid color hex code!";
 			}
 		} else {
 			colorOk = true;

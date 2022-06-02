@@ -32,7 +32,7 @@ exports.getUsers = async (req, res, next) => {
 		}
 
 		const getUsers = await User.find(query).select("fullName username avatar").sort({ createdAt: -1 }).skip(skip).limit(limit);
-		return res.send({ users: getUsers });
+		return res.json({ users: getUsers });
 	} catch (err) {
 		next(err);
 	}
