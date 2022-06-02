@@ -1,6 +1,7 @@
 const { isValidObjectId } = require("mongoose");
 const { imageCheck, upload } = require("../../utils/file");
 const { isValidEmail } = require("../../utils/func");
+const { defaultTags } = require("../../config/centralVariables");
 const User = require("../../models/User");
 const Workspace = require("../../models/Workspace");
 const Space = require("../../models/Space");
@@ -83,6 +84,21 @@ exports.createWorkspace = async (req, res, next) => {
 
 				const initialSpace = await spaceStructure.save();
 				workspace.initialSpaceId = initialSpace._id;
+
+				// initial or default Tags create
+				const arr = [];
+				for (const tag of defaultTags) {
+					if (tag.name) {
+						arr.push({
+							name: tag.name,
+							color: tag.color,
+							workSpaceRef: saveWorkspace._id,
+						});
+					}
+				}
+				if (arr.length > 0) {
+					await Tag.create(arr);
+				}
 			}
 
 			return res.status(201).json({ workspace });
@@ -432,6 +448,7 @@ exports.createTags = async (req, res, next) => {
 								});
 
 								const createTag = await tagStructure.save();
+								createTag.workSpaceRef = undefined;
 
 								return res.status(201).json({ tag: createTag });
 							} else {

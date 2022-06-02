@@ -14,7 +14,7 @@ const tagSchema = new Schema(
 		color: {
 			type: String,
 			default: () => {
-				const colors = ["#7FC241", "#00D4A0", "#FF8C94", "#FF693B", "#FBCB53", "#47C6D8", "#635F63", "#47B9EA", "#838CFF", "#FF8900"];
+				const colors = ["#7fc241", "#00d4a0", "#ff8c94", "#ff693b", "#fbcb53", "#47c6d8", "#635f63", "#47b9ea", "#838cff", "#ff8900"];
 				const randNumber = Math.floor(Math.random() * colors.length);
 				const color = colors[randNumber];
 				return color;

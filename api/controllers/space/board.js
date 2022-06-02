@@ -30,6 +30,8 @@ exports.createList = async (req, res, next) => {
 								creator: user._id,
 							});
 							const createList = await listStructure.save();
+							createList.spaceRef = undefined;
+							createList.creator = undefined;
 							res.status(201).json({ list: createList });
 						} else {
 							issue.message = "Couldn't create a duplicate list in the same space!";
@@ -131,6 +133,15 @@ exports.createCard = async (req, res, next) => {
 										creator: user._id,
 									});
 									const createCard = await cardStructure.save();
+
+									createCard.spaceRef = undefined;
+									createCard.listRef = undefined;
+									createCard.creator = undefined;
+									createCard.tags = undefined;
+									createCard.attachments = undefined;
+									createCard.attachments = undefined;
+									createCard.assignee = undefined;
+									createCard.progress = undefined;
 									res.status(201).json({ card: createCard });
 								} else {
 									issue.message = "Couldn't create a card with duplicate name in the same list!";

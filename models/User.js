@@ -37,7 +37,10 @@ const userSchema = new Schema(
 		avatar: {
 			type: String,
 		},
-		socketId: String,
+		socketId: {
+			type: String,
+			select: false,
+		},
 	},
 	{
 		timestamps: true,

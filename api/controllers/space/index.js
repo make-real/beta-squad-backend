@@ -140,6 +140,7 @@ exports.getSpace = async (req, res, next) => {
 			if (isValidObjectId(workspaceId)) {
 				const getSpace = await Space.find({ $and: [{ "members.member": user._id }, { workSpaceRef: workspaceId }] })
 					.sort({ createdAt: -1 })
+					.select("-workSpaceRef")
 					.skip(skip)
 					.limit(limit);
 
