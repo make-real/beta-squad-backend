@@ -448,7 +448,6 @@ exports.createTags = async (req, res, next) => {
 								});
 
 								const createTag = await tagStructure.save();
-								createTag.workSpaceRef = undefined;
 
 								return res.status(201).json({ tag: createTag });
 							} else {

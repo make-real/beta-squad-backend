@@ -5,6 +5,8 @@ const { createList, getList, createCard, updateCard } = require("../../controlle
 
 boardRouter.post("/", createList);
 boardRouter.get("/", getList);
+
+///////// CARD ///////////////
 boardRouter.post("/:listId/card", createCard);
 boardRouter.patch("/:listId/card/:cardId", multipart(), updateCard);
 

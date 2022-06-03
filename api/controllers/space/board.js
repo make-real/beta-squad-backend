@@ -33,7 +33,7 @@ exports.createList = async (req, res, next) => {
 								creator: user._id,
 							});
 							const createList = await listStructure.save();
-							createList.spaceRef = undefined;
+
 							createList.creator = undefined;
 							res.status(201).json({ list: createList });
 						} else {
@@ -102,6 +102,17 @@ exports.getList = async (req, res, next) => {
 	}
 };
 
+/* 
+*
+*
+*
+*
+CARD 
+*
+*
+*
+*
+*/
 exports.createCard = async (req, res, next) => {
 	let { spaceId, listId } = req.params;
 	let { name } = req.body;
@@ -119,47 +130,39 @@ exports.createCard = async (req, res, next) => {
 			const isValidSpaceId = isValidObjectId(spaceId);
 			const isValidListId = isValidObjectId(listId);
 			if (isValidSpaceId && isValidListId) {
-				const existsSpace = await Space.exists({ _id: spaceId });
-				if (existsSpace) {
-					const doIHaveAccess = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
-					if (doIHaveAccess) {
-						const existsList = await List.exists({ _id: listId });
-						if (existsList) {
-							const isListOfTheSpace = await List.exists({ $and: [{ _id: listId }, { spaceRef: spaceId }] });
-							if (isListOfTheSpace) {
-								const isDuplicate = await Card.exists({ $and: [{ listRef: listId }, { name: new RegExp(`^${name}$`, "i") }] });
-								if (!isDuplicate) {
-									const cardStructure = new Card({
-										name,
-										spaceRef: spaceId,
-										listRef: listId,
-										creator: user._id,
-									});
-									const createCard = await cardStructure.save();
+				const existsList = await List.findOne({ _id: listId }).select("spaceRef");
+				if (existsList) {
+					const existsSpace = await Space.exists({ _id: existsList.spaceRef });
+					if (existsSpace) {
+						const doIHaveAccess = await Space.exists({ $and: [{ _id: existsList.spaceRef }, { "members.member": user._id }] });
+						if (doIHaveAccess) {
+							const isDuplicate = await Card.exists({ $and: [{ listRef: listId }, { name: new RegExp(`^${name}$`, "i") }] });
+							if (!isDuplicate) {
+								const cardStructure = new Card({
+									name,
+									spaceRef: existsList.spaceRef,
+									listRef: listId,
+									creator: user._id,
+								});
+								const createCard = await cardStructure.save();
 
-									createCard.spaceRef = undefined;
-									createCard.listRef = undefined;
-									createCard.creator = undefined;
-									createCard.tags = undefined;
-									createCard.attachments = undefined;
-									createCard.attachments = undefined;
-									createCard.assignee = undefined;
-									createCard.progress = undefined;
-									res.status(201).json({ card: createCard });
-								} else {
-									issue.message = "Couldn't create a card with duplicate name in the same list!";
-								}
+								createCard.creator = undefined;
+								createCard.tags = undefined;
+								createCard.attachments = undefined;
+								createCard.assignee = undefined;
+								createCard.progress = undefined;
+								res.status(201).json({ card: createCard });
 							} else {
-								issue.message = "Something is wrong!";
+								issue.message = "Couldn't create a card with duplicate name in the same list!";
 							}
 						} else {
-							issue.message = "Not found the list!";
+							issue.message = "You have no access to this space!";
 						}
 					} else {
-						issue.message = "You have no access to this space!";
+						issue.message = "Not found space!";
 					}
 				} else {
-					issue.message = "Not found space!";
+					issue.message = "Not found the list!";
 				}
 			} else {
 				if (!isValidSpaceId) {
