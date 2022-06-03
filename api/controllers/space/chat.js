@@ -2,7 +2,7 @@ const { isValidObjectId } = require("mongoose");
 const Space = require("../../../models/Space");
 const SpaceChat = require("../../../models/SpaceChat");
 const { splitSpecificParts } = require("../../../utils/func");
-const { multipleFilesCHeckAndUpload } = require("../../../utils/file");
+const { multipleFilesCheckAndUpload } = require("../../../utils/file");
 const User = require("../../../models/User");
 
 exports.sendMessage = async (req, res, next) => {
@@ -74,7 +74,7 @@ exports.sendMessage = async (req, res, next) => {
 			const files = req.files;
 			if (files) {
 				if (files.attachments) {
-					const { filesUrl, errorMessage } = await multipleFilesCHeckAndUpload(files.attachments);
+					const { filesUrl, errorMessage } = await multipleFilesCheckAndUpload(files.attachments);
 					if (!errorMessage) {
 						attachmentsUrls = filesUrl;
 						attachmentsOk = true;
@@ -147,7 +147,7 @@ exports.sendMessage = async (req, res, next) => {
 							},
 						],
 					},
-					{ $push: { seen: [user._id] } }
+					{ $push: { seen: user._id } }
 				).then();
 				// Operation End
 			}
@@ -224,7 +224,7 @@ exports.getMessage = async (req, res, next) => {
 								},
 							],
 						},
-						{ $push: { seen: [user._id] } }
+						{ $push: { seen: user._id } }
 					).then();
 					// Operation End
 				} else {

@@ -22,7 +22,7 @@ const imageCheck = (image) => {
 	return { status, message };
 };
 
-async function multipleFilesCHeckAndUpload(files) {
+async function multipleFilesCheckAndUpload(files) {
 	const filesUrl = [];
 	let errorMessage;
 	if (files) {
@@ -82,4 +82,4 @@ const upload = async (filePath, width, height) => {
 	}
 };
 
-module.exports = { imageCheck, multipleFilesCHeckAndUpload, upload };
+module.exports = { imageCheck, multipleFilesCheckAndUpload, upload };
