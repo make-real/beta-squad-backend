@@ -102,6 +102,64 @@ exports.getList = async (req, res, next) => {
 	}
 };
 
+exports.editList = async (req, res, next) => {
+	let { spaceId, listId } = req.params;
+	let { name } = req.body;
+	try {
+		const user = req.user;
+		const issue = {};
+
+		if (name) {
+			name = String(name)
+				.replace(/\r\n/g, " ")
+				.replace(/[\r\n]/g, " ")
+				.replace(/  +/g, " ")
+				.trim();
+
+			const isValidSpaceId = isValidObjectId(spaceId);
+			const isValidListId = isValidObjectId(listId);
+			if (isValidSpaceId && isValidListId) {
+				const existsList = await List.findOne({ _id: listId }).select("spaceRef");
+				if (existsList) {
+					const existsSpace = await Space.exists({ _id: existsList.spaceRef });
+					if (existsSpace) {
+						const doIHaveAccess = await Space.exists({ $and: [{ _id: existsList.spaceRef }, { "members.member": user._id }] });
+						if (doIHaveAccess) {
+							const updateList = await List.updateOne({ _id: listId }, { name });
+
+							if (updateList.modifiedCount) {
+								res.json({ message: "Successfully updated name!" });
+							} else {
+								issue.message = "Failed to update!";
+							}
+						} else {
+							issue.message = "You have no access to this space of the list!";
+						}
+					} else {
+						issue.message = "Not found space!";
+					}
+				} else {
+					issue.message = "Not found the list!";
+				}
+			} else {
+				if (!isValidSpaceId) {
+					issue.message = "Invalid space id!";
+				} else if (!isValidListId) {
+					issue.message = "Invalid list id!";
+				}
+			}
+		} else {
+			issue.message = "Please provide a name to update list name!";
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
+
 /* 
 *
 *
