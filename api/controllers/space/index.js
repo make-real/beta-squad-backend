@@ -107,7 +107,7 @@ exports.createSpace = async (req, res, next) => {
 			const saveSpace = await spaceStructure.save();
 			saveSpace.members = undefined;
 
-			return res.status(201).json({ space });
+			return res.status(201).json({ space: saveSpace });
 		}
 
 		return res.status(400).json({ issue });

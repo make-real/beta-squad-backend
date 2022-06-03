@@ -240,6 +240,63 @@ exports.createCard = async (req, res, next) => {
 		next(err);
 	}
 };
+exports.getDataOfSingleCard = async (req, res, next) => {
+	let { spaceId, listId, cardId } = req.params;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		const isValidCardId = isValidObjectId(cardId);
+		if (isValidSpaceId && isValidListId && isValidCardId) {
+			const cardExists = await Card.findOne({ _id: cardId }).select("spaceRef");
+			if (cardExists) {
+				const existsSpace = await Space.exists({ _id: cardExists.spaceRef });
+				if (existsSpace) {
+					const doIHaveAccess = await Space.exists({ $and: [{ _id: cardExists.spaceRef }, { "members.member": user._id }] });
+					if (doIHaveAccess) {
+						const getCard = await Card.findOne({ _id: cardId })
+							.select("-createdAt -updatedAt -creator")
+							.populate([
+								{
+									path: "tags",
+									select: "name color",
+								},
+								{
+									path: "assignee",
+									select: "fullName username avatar",
+								},
+							]);
+
+						return res.json({ card: getCard });
+					} else {
+						issue.spaceId = "You have no access to this space!";
+					}
+				} else {
+					issue.spaceId = "Not found space!";
+				}
+			} else {
+				issue.cardId = "Not found card!";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.spaceId = "Invalid space id!";
+			} else if (!isValidListId) {
+				issue.listId = "Invalid list id!";
+			} else if (!isValidCardId) {
+				issue.cardId = "Invalid card id!";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
 
 exports.updateCard = async (req, res, next) => {
 	let { spaceId, listId, cardId } = req.params;
