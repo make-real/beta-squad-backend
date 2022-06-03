@@ -1,3 +1,5 @@
+const fs = require("fs");
+
 const cloudinary = require("cloudinary").v2;
 
 /**
@@ -72,11 +74,15 @@ async function multipleFilesCheckAndUpload(files) {
  */
 const upload = async (filePath, width, height) => {
 	try {
+		let rt;
 		if (width && height) {
-			return await cloudinary.uploader.upload(filePath, { width, height });
+			rt = await cloudinary.uploader.upload(filePath, { width, height });
 		} else {
-			return await cloudinary.uploader.upload(filePath, { resource_type: "raw" });
+			rt = await cloudinary.uploader.upload(filePath, { resource_type: "raw" });
 		}
+
+		fs.unlinkSync(filePath);
+		return rt;
 	} catch (err) {
 		return { message: err.message || "Failed to upload file" };
 	}
