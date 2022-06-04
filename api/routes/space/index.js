@@ -4,6 +4,7 @@ const { createSpace, getSpaces, updateSpace, addMembers, removeMembers, getMembe
 const spaceChatRoutes = require("./chat");
 const boardRoutes = require("./board");
 const rowRoutes = require("./row");
+const calendarRoutes = require("./calendar");
 
 spaceRouter.post("/", createSpace);
 spaceRouter.get("/", getSpaces);
@@ -14,5 +15,6 @@ spaceRouter.get("/:spaceId/members", getMembers);
 spaceRouter.use("/:spaceId/chat", spaceChatRoutes);
 spaceRouter.use("/:spaceId/board", boardRoutes);
 spaceRouter.use("/:spaceId/row", rowRoutes);
+spaceRouter.use("/:spaceId/calendar", calendarRoutes);
 
 module.exports = spaceRouter;
