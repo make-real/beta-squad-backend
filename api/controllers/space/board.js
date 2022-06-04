@@ -62,9 +62,9 @@ exports.createList = async (req, res, next) => {
 
 exports.getLists = async (req, res, next) => {
 	let { spaceId } = req.params;
-	let { skip, limit } = req.query;
+	let { skip, limit, getCards } = req.query;
 	try {
-		limit = parseInt(limit) || 20;
+		limit = parseInt(limit) || 50;
 		skip = parseInt(skip) || 0;
 		const user = req.user;
 		const issue = {};
@@ -75,14 +75,17 @@ exports.getLists = async (req, res, next) => {
 				const doIHaveAccess = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
 				if (doIHaveAccess) {
 					let getLists = await List.find({ spaceRef: spaceId }).sort({ createdAt: -1 }).select("name").skip(skip).limit(limit);
-					getLists = JSON.parse(JSON.stringify(getLists));
-					for (const list of getLists) {
-						const getCards = await Card.find({ listRef: list._id }).select("name description progress tags startDate endDate spaceRef listRef").populate({
-							path: "tags",
-							select: "name color",
-						});
-						list.cards = getCards;
+					if (getCards) {
+						getLists = JSON.parse(JSON.stringify(getLists));
+						for (const list of getLists) {
+							const getCards = await Card.find({ listRef: list._id }).select("name description progress tags startDate endDate spaceRef listRef").populate({
+								path: "tags",
+								select: "name color",
+							});
+							list.cards = getCards;
+						}
 					}
+
 					res.json({ lists: getLists });
 				} else {
 					issue.message = "You have no access to this space!";
