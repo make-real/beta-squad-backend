@@ -358,10 +358,10 @@ exports.getSingleCard = async (req, res, next) => {
 
 exports.updateCard = async (req, res, next) => {
 	let { spaceId, listId, cardId } = req.params;
-	let { name, description, progress, tagId, startDate, endDate, assignUser, removeAttachmentUrl } = req.body;
+	let { name, description, progress, tagId, startDate, endDate, assignUser, removeAssignedUser, removeAttachmentUrl } = req.body;
 
 	try {
-		let nameOk, descriptionOk, progressOk, tagIdOk, startDateOk, endDateOk, assignUserOk;
+		let nameOk, descriptionOk, progressOk, tagIdOk, startDateOk, endDateOk, assignUserOk, removeAssignedUserOk;
 		const user = req.user;
 		const issue = {};
 
@@ -514,8 +514,24 @@ exports.updateCard = async (req, res, next) => {
 							assignUserOk = true;
 						}
 
-						// update
-						if (nameOk && descriptionOk && progressOk && tagIdOk && startDateOk && endDateOk && assignUserOk) {
+						// removeAssignedUser check
+						if (removeAssignedUser) {
+							if (isValidObjectId(removeAssignedUser)) {
+								const theUserAlreadyAssignee = await Card.exists({ $and: [{ _id: cardId }, { assignee: removeAssignedUser }] });
+								if (theUserAlreadyAssignee) {
+									removeAssignedUserOk = true;
+								} else {
+									issue.removeAssignedUser = "The user is not assigned to the card!";
+								}
+							} else {
+								issue.removeAssignedUser = "Invalid removeAssignedUser id!";
+							}
+						} else {
+							removeAssignedUser = undefined;
+							removeAssignedUserOk = true;
+						}
+
+						if (nameOk && descriptionOk && progressOk && tagIdOk && startDateOk && endDateOk && assignUserOk && removeAssignedUserOk) {
 							let attachmentsUrl;
 							let attachmentsOk;
 							const files = req.files;
@@ -549,7 +565,10 @@ exports.updateCard = async (req, res, next) => {
 											assignee: assignUser,
 											attachments: attachmentsUrl,
 										},
-										$pull: { attachments: removeAttachmentUrl },
+										$pull: {
+											attachments: removeAttachmentUrl,
+											assignee: removeAssignedUser,
+										},
 									}
 								);
 

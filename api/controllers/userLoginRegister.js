@@ -138,6 +138,7 @@ exports.register = async (req, res, next) => {
 				issue.phone = "Invalid phone number!";
 			}
 		} else {
+			phone = undefined;
 			phoneOk = true;
 		}
 
