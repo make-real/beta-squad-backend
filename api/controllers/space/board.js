@@ -667,3 +667,67 @@ exports.moveCard = async (req, res, next) => {
 		next(err);
 	}
 };
+
+exports.copyCard = async (req, res, next) => {
+	let { spaceId, listId, cardId } = req.params;
+	let { name } = req.body;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		name = name
+			? String(name)
+					.replace(/\r\n/g, " ")
+					.replace(/[\r\n]/g, " ")
+					.replace(/  +/g, " ")
+					.trim()
+			: undefined;
+
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		const isValidCardId = isValidObjectId(cardId);
+		if (isValidSpaceId && isValidListId && isValidCardId) {
+			let cardExists = await Card.findOne({ _id: cardId }).select("name description progress tags attachments startDate endDate assignee spaceRef listRef");
+			if (cardExists) {
+				const existsSpace = await Space.exists({ _id: cardExists.spaceRef });
+				if (existsSpace) {
+					const doIHaveAccess = await Space.exists({ $and: [{ _id: cardExists.spaceRef }, { "members.member": user._id }] });
+					if (doIHaveAccess) {
+						cardExists = JSON.parse(JSON.stringify(cardExists));
+						cardExists._id = undefined;
+						cardExists.name = name ? name : `Copy of ${cardExists.name}`;
+
+						const newCardOfCopy = new Card({
+							creator: user._id,
+							...cardExists,
+						});
+						const copiedCard = await newCardOfCopy.save();
+
+						return res.json({ copiedCard });
+					} else {
+						issue.spaceId = "You have no access to this space!";
+					}
+				} else {
+					issue.spaceId = "Not found space!";
+				}
+			} else {
+				issue.cardId = "Not found card!";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.spaceId = "Invalid space id!";
+			} else if (!isValidListId) {
+				issue.listId = "Invalid list id!";
+			} else if (!isValidCardId) {
+				issue.cardId = "Invalid card id!";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
