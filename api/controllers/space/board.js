@@ -595,3 +595,75 @@ exports.updateCard = async (req, res, next) => {
 		next(err);
 	}
 };
+
+exports.moveCard = async (req, res, next) => {
+	let { spaceId, listId, cardId } = req.params;
+	let { newListId } = req.body;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		const isValidCardId = isValidObjectId(cardId);
+		if (isValidSpaceId && isValidListId && isValidCardId) {
+			const cardExists = await Card.findOne({ _id: cardId }).select("startDate spaceRef");
+			if (cardExists) {
+				const existsSpace = await Space.findOne({ _id: cardExists.spaceRef }).select("workSpaceRef");
+				if (existsSpace) {
+					const doIHaveAccess = await Space.exists({ $and: [{ _id: cardExists.spaceRef }, { "members.member": user._id }] });
+					if (doIHaveAccess) {
+						if (newListId) {
+							const isValidNewListId = isValidObjectId(newListId);
+							if (isValidNewListId) {
+								const existsMoveToList = await List.exists({ _id: newListId });
+								if (existsMoveToList) {
+									const isValidToMoveToNewList = await List.exists({ $and: [{ _id: newListId }, { spaceRef: cardExists.spaceRef }] });
+									if (isValidToMoveToNewList) {
+										await Card.updateOne(
+											{ _id: cardId },
+											{
+												listRef: newListId,
+											}
+										);
+										const card = await Card.findOne({ _id: cardId }).select("name listRef spaceRef");
+										return res.json({ card });
+									} else {
+										issue.message = "Unable to perform the operation!";
+									}
+								} else {
+									issue.message = "Not found new List!";
+								}
+							} else {
+								issue.message = "Invalid new List id!";
+							}
+						} else {
+							issue.message = "Please provide new List id!";
+						}
+					} else {
+						issue.message = "You have no access to this space!";
+					}
+				} else {
+					issue.message = "Not found space!";
+				}
+			} else {
+				issue.message = "Not found card!";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.message = "Invalid space id!";
+			} else if (!isValidListId) {
+				issue.message = "Invalid list id!";
+			} else if (!isValidCardId) {
+				issue.message = "Invalid card id!";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
