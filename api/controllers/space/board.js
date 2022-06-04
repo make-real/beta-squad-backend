@@ -77,7 +77,7 @@ exports.getList = async (req, res, next) => {
 					let getLists = await List.find({ spaceRef: spaceId }).sort({ createdAt: -1 }).select("name").skip(skip).limit(limit);
 					getLists = JSON.parse(JSON.stringify(getLists));
 					for (const list of getLists) {
-						const getCards = await Card.find({ listRef: list._id }).select("name description progress tags startDate endDate").populate({
+						const getCards = await Card.find({ listRef: list._id }).select("name description progress tags startDate endDate spaceRef listRef").populate({
 							path: "tags",
 							select: "name color",
 						});
