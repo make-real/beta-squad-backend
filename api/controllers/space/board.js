@@ -78,7 +78,7 @@ exports.getLists = async (req, res, next) => {
 					if (getCards) {
 						getLists = JSON.parse(JSON.stringify(getLists));
 						for (const list of getLists) {
-							const getCards = await Card.find({ listRef: list._id }).select("name description progress tags startDate endDate spaceRef listRef").populate({
+							const getCards = await Card.find({ listRef: list._id }).select("name progress tags startDate endDate spaceRef listRef").populate({
 								path: "tags",
 								select: "name color",
 							});
@@ -264,7 +264,7 @@ exports.getCards = async (req, res, next) => {
 					const doIHaveAccess = await Space.exists({ $and: [{ _id: existsList.spaceRef }, { "members.member": user._id }] });
 					if (doIHaveAccess) {
 						const getCards = await Card.find({ listRef: listId })
-							.select("name description progress tags startDate endDate spaceRef listRef")
+							.select("name progress tags startDate endDate spaceRef listRef")
 							.populate({
 								path: "tags",
 								select: "name color",
