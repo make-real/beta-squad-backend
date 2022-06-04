@@ -60,7 +60,7 @@ exports.createList = async (req, res, next) => {
 	}
 };
 
-exports.getList = async (req, res, next) => {
+exports.getLists = async (req, res, next) => {
 	let { spaceId } = req.params;
 	let { skip, limit } = req.query;
 	try {
@@ -240,7 +240,62 @@ exports.createCard = async (req, res, next) => {
 		next(err);
 	}
 };
-exports.getDataOfSingleCard = async (req, res, next) => {
+
+exports.getCards = async (req, res, next) => {
+	let { spaceId, listId } = req.params;
+	let { skip, limit } = req.query;
+	try {
+		limit = parseInt(limit) || undefined;
+		skip = parseInt(skip) || 0;
+
+		const user = req.user;
+		const issue = {};
+
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		if (isValidSpaceId && isValidListId) {
+			const existsList = await List.findOne({ _id: listId }).select("spaceRef");
+			if (existsList) {
+				const existsSpace = await Space.exists({ _id: existsList.spaceRef });
+				if (existsSpace) {
+					const doIHaveAccess = await Space.exists({ $and: [{ _id: existsList.spaceRef }, { "members.member": user._id }] });
+					if (doIHaveAccess) {
+						const getCards = await Card.find({ listRef: listId })
+							.select("name description progress tags startDate endDate spaceRef listRef")
+							.populate({
+								path: "tags",
+								select: "name color",
+							})
+							.skip(skip)
+							.limit(limit);
+
+						return res.json({ cards: getCards });
+					} else {
+						issue.message = "You have no access to this space!";
+					}
+				} else {
+					issue.message = "Not found space!";
+				}
+			} else {
+				issue.message = "Not found the list!";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.message = "Invalid space id!";
+			} else if (!isValidListId) {
+				issue.message = "Invalid list id!";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
+
+exports.getSingleCard = async (req, res, next) => {
 	let { spaceId, listId, cardId } = req.params;
 
 	try {

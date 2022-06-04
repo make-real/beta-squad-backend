@@ -1,11 +1,11 @@
 const spaceRouter = require("express").Router();
 
-const { createSpace, getSpace, updateSpace, addMembers, removeMembers, getMembers } = require("../../controllers/space");
+const { createSpace, getSpaces, updateSpace, addMembers, removeMembers, getMembers } = require("../../controllers/space");
 const spaceChatRoutes = require("./chat");
 const boardRoutes = require("./board");
 
 spaceRouter.post("/", createSpace);
-spaceRouter.get("/", getSpace);
+spaceRouter.get("/", getSpaces);
 spaceRouter.patch("/:spaceId", updateSpace);
 spaceRouter.put("/:spaceId/add-members", addMembers);
 spaceRouter.put("/:spaceId/remove-members", removeMembers);

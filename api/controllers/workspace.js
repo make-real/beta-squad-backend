@@ -117,7 +117,7 @@ exports.createWorkspace = async (req, res, next) => {
  * @param {express.Response} res Express response object
  * @param {() => } next Express callback
  */
-exports.getWorkspace = async (req, res, next) => {
+exports.getWorkspaces = async (req, res, next) => {
 	let { limit, skip } = req.query;
 	try {
 		const user = req.user;

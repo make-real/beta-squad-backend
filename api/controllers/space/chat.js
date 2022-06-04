@@ -161,7 +161,7 @@ exports.sendMessage = async (req, res, next) => {
 	}
 };
 
-exports.getMessage = async (req, res, next) => {
+exports.getMessages = async (req, res, next) => {
 	let { spaceId } = req.params;
 	let { skip, limit } = req.query;
 	try {

@@ -123,7 +123,7 @@ exports.createSpace = async (req, res, next) => {
  * @param {express.Response} res Express response object
  * @param {() => } next Express callback
  */
-exports.getSpace = async (req, res, next) => {
+exports.getSpaces = async (req, res, next) => {
 	let { workspaceId, limit, skip } = req.query;
 	try {
 		limit = parseInt(limit) || 20;
