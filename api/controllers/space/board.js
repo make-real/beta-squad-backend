@@ -324,6 +324,10 @@ exports.getSingleCard = async (req, res, next) => {
 									select: "name color",
 								},
 								{
+									path: "checkList",
+									select: "content checked spaceRef cardRef assignee",
+								},
+								{
 									path: "assignee",
 									select: "fullName username avatar",
 								},
@@ -581,6 +585,10 @@ exports.updateCard = async (req, res, next) => {
 											select: "name color",
 										},
 										{
+											path: "checkList",
+											select: "content checked spaceRef cardRef assignee",
+										},
+										{
 											path: "assignee",
 											select: "fullName username avatar",
 										},
@@ -819,6 +827,64 @@ exports.createChecklistItem = async (req, res, next) => {
 				issue.listId = "Invalid list id!";
 			} else if (!isValidCardId) {
 				issue.cardId = "Invalid card id!";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
+
+exports.deleteChecklistItem = async (req, res, next) => {
+	let { spaceId, listId, cardId, checklistId } = req.params;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		const isValidCardId = isValidObjectId(cardId);
+		const isValidChecklistId = isValidObjectId(checklistId);
+		if (isValidSpaceId && isValidListId && isValidCardId && isValidChecklistId) {
+			const checklistItemExists = await Checklist.findOne({ _id: checklistId }).select("spaceRef cardRef");
+			if (checklistItemExists) {
+				const existsSpace = await Space.exists({ _id: checklistItemExists.spaceRef });
+				if (existsSpace) {
+					const doIHaveAccess = await Space.exists({ $and: [{ _id: checklistItemExists.spaceRef }, { "members.member": user._id }] });
+					if (doIHaveAccess) {
+						await Checklist.deleteOne({ _id: checklistItemExists._id });
+						await Card.updateOne(
+							{ _id: checklistItemExists.cardRef },
+							{
+								$pull: {
+									checkList: checklistItemExists._id,
+								},
+							}
+						);
+
+						return res.json({ message: "Successfully removed the checklist item" });
+					} else {
+						issue.spaceId = "You have no access to this space!";
+					}
+				} else {
+					issue.spaceId = "Not found space!";
+				}
+			} else {
+				issue.cardId = "Not found Checklist item!";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.spaceId = "Invalid space id!";
+			} else if (!isValidListId) {
+				issue.listId = "Invalid list id!";
+			} else if (!isValidCardId) {
+				issue.cardId = "Invalid card id!";
+			} else if (!isValidChecklistId) {
+				issue.cardId = "Invalid checklist item id!";
 			}
 		}
 
