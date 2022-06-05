@@ -838,6 +838,144 @@ exports.createChecklistItem = async (req, res, next) => {
 	}
 };
 
+exports.updateChecklistItem = async (req, res, next) => {
+	let { spaceId, listId, cardId, checklistId } = req.params;
+	let { content, check, assignUser, removeAssignedUser } = req.body;
+
+	try {
+		let contentOk, assignUserOk, removeAssignedUserOk;
+		const user = req.user;
+		const issue = {};
+
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		const isValidCardId = isValidObjectId(cardId);
+		const isValidChecklistId = isValidObjectId(checklistId);
+		if (isValidSpaceId && isValidListId && isValidCardId && isValidChecklistId) {
+			const checklistItemExists = await Checklist.findOne({ _id: checklistId }).select("spaceRef cardRef");
+			if (checklistItemExists) {
+				const existsSpace = await Space.exists({ _id: checklistItemExists.spaceRef });
+				if (existsSpace) {
+					const doIHaveAccess = await Space.exists({ $and: [{ _id: checklistItemExists.spaceRef }, { "members.member": user._id }] });
+					if (doIHaveAccess) {
+						if (content) {
+							content = String(content)
+								.replace(/\r\n/g, " ")
+								.replace(/[\r\n]/g, " ")
+								.replace(/  +/g, " ")
+								.trim();
+
+							contentOk = true;
+						} else {
+							content = undefined;
+							contentOk = true;
+						}
+
+						if (check !== undefined && check !== "") {
+							if (check == false || String(check).toLocaleLowerCase() == "false" || check == 0) {
+								check = false;
+							} else {
+								check = true;
+							}
+						} else {
+							check = undefined;
+						}
+
+						// assign user check
+						if (assignUser) {
+							if (isValidObjectId(assignUser)) {
+								const userExists = await User.exists({ _id: assignUser });
+								if (userExists) {
+									const assignUserExistsInSpace = await Space.exists({ $and: [{ _id: checklistItemExists.spaceRef }, { "members.member": assignUser }] });
+									if (assignUserExistsInSpace) {
+										const theUserAlreadyAssignee = await Checklist.exists({ $and: [{ _id: checklistItemExists._id }, { assignee: assignUser }] });
+										if (!theUserAlreadyAssignee) {
+											assignUserOk = true;
+										} else {
+											issue.assignUser = "Tried assign users is already assigned to the Checklist item!";
+										}
+									} else {
+										issue.assignUser = "Assign users must first add to space!!";
+									}
+								} else {
+									issue.assignUser = "Assign user does't exists!";
+								}
+							} else {
+								issue.assignUser = "Invalid assignUser id!";
+							}
+						} else {
+							assignUser = undefined;
+							assignUserOk = true;
+						}
+
+						// removeAssignedUser check
+						if (removeAssignedUser) {
+							if (isValidObjectId(removeAssignedUser)) {
+								const theUserAlreadyAssignee = await Checklist.exists({ $and: [{ _id: checklistItemExists._id }, { assignee: removeAssignedUser }] });
+								if (theUserAlreadyAssignee) {
+									removeAssignedUserOk = true;
+								} else {
+									issue.removeAssignedUser = "The user is not assigned to the check list item!";
+								}
+							} else {
+								issue.removeAssignedUser = "Invalid removeAssignedUser id!";
+							}
+						} else {
+							removeAssignedUser = undefined;
+							removeAssignedUserOk = true;
+						}
+
+						if (contentOk && assignUserOk && removeAssignedUserOk) {
+							await Checklist.updateOne(
+								{ _id: checklistItemExists._id },
+								{
+									content,
+									checked: check,
+									$push: {
+										assignee: assignUser,
+									},
+									$pull: {
+										assignee: removeAssignedUser,
+									},
+								}
+							);
+
+							const getUpdated = await Checklist.findOne({ _id: checklistItemExists._id }).populate({
+								path: "assignee",
+								select: "fullName username avatar",
+							});
+
+							return res.json({ checkListItem: getUpdated });
+						}
+					} else {
+						issue.spaceId = "You have no access to this space!";
+					}
+				} else {
+					issue.spaceId = "Not found space!";
+				}
+			} else {
+				issue.cardId = "Not found checklist!";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.spaceId = "Invalid space id!";
+			} else if (!isValidListId) {
+				issue.listId = "Invalid list id!";
+			} else if (!isValidCardId) {
+				issue.cardId = "Invalid card id!";
+			} else if (!isValidChecklistId) {
+				issue.cardId = "Invalid checklist item id!";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
+
 exports.deleteChecklistItem = async (req, res, next) => {
 	let { spaceId, listId, cardId, checklistId } = req.params;
 
