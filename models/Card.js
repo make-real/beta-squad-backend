@@ -38,6 +38,15 @@ const cardSchema = new Schema(
 			],
 			select: false,
 		},
+		checkList: {
+			type: [
+				{
+					type: Schema.Types.ObjectId,
+					ref: "Checklist",
+				},
+			],
+			select: false,
+		},
 		spaceRef: {
 			type: Schema.Types.ObjectId,
 			ref: "Space",

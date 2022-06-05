@@ -3,6 +3,7 @@ const User = require("../../../models/User");
 const Space = require("../../../models/Space");
 const List = require("../../../models/List");
 const Card = require("../../../models/Card");
+const Checklist = require("../../../models/Checklist");
 const Tag = require("../../../models/Tag");
 const { multipleFilesCheckAndUpload } = require("../../../utils/file");
 
@@ -724,6 +725,84 @@ exports.copyCard = async (req, res, next) => {
 						const copiedCard = await newCardOfCopy.save();
 
 						return res.json({ copiedCard });
+					} else {
+						issue.spaceId = "You have no access to this space!";
+					}
+				} else {
+					issue.spaceId = "Not found space!";
+				}
+			} else {
+				issue.cardId = "Not found card!";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.spaceId = "Invalid space id!";
+			} else if (!isValidListId) {
+				issue.listId = "Invalid list id!";
+			} else if (!isValidCardId) {
+				issue.cardId = "Invalid card id!";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
+
+exports.createChecklistItem = async (req, res, next) => {
+	let { spaceId, listId, cardId } = req.params;
+	let { content } = req.body;
+
+	try {
+		let contentOk;
+		const user = req.user;
+		const issue = {};
+
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		const isValidCardId = isValidObjectId(cardId);
+		if (isValidSpaceId && isValidListId && isValidCardId) {
+			const cardExists = await Card.findOne({ _id: cardId }).select("startDate spaceRef");
+			if (cardExists) {
+				const existsSpace = await Space.exists({ _id: cardExists.spaceRef });
+				if (existsSpace) {
+					const doIHaveAccess = await Space.exists({ $and: [{ _id: cardExists.spaceRef }, { "members.member": user._id }] });
+					if (doIHaveAccess) {
+						// check card content
+						if (content) {
+							content = String(content)
+								.replace(/\r\n/g, " ")
+								.replace(/[\r\n]/g, " ")
+								.replace(/  +/g, " ")
+								.trim();
+
+							contentOk = true;
+						} else {
+							issue.message = "Please provide checklist content";
+						}
+
+						if (contentOk) {
+							const checklistStructure = new Checklist({
+								content,
+								spaceRef: cardExists.spaceRef,
+								cardRef: cardExists._id,
+							});
+							const saveCheckListItem = await checklistStructure.save();
+
+							await Card.updateOne(
+								{ _id: cardExists._id },
+								{
+									$push: {
+										checkList: saveCheckListItem._id,
+									},
+								}
+							);
+
+							return res.json({ checkListItem: saveCheckListItem });
+						}
 					} else {
 						issue.spaceId = "You have no access to this space!";
 					}
