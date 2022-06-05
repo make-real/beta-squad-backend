@@ -20,16 +20,20 @@ exports.userAuthorization = async (req, res, next) => {
 					});
 
 					if (loginSession) {
-						const user = loginSession.user;
-						if (user) {
-							if (user.emailVerified) {
-								req.user = user;
-								return next();
+						if (loginSession.expireDate > new Date()) {
+							const user = loginSession.user;
+							if (user) {
+								if (user.emailVerified) {
+									req.user = user;
+									return next();
+								} else {
+									issue.message = "Please verify your email address!";
+								}
 							} else {
-								issue.message = "Please verify your email address!";
+								issue.message = "User doesn't exist!";
 							}
 						} else {
-							issue.message = "User doesn't exist!";
+							issue.message = "Session expired!";
 						}
 					} else {
 						issue.message = "Invalid token!";
