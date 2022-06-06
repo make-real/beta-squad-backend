@@ -518,6 +518,91 @@ exports.roleChangeAndRemoveTeamMembers = async (req, res, next) => {
 };
 
 /**
+ * Ownership Transfer of workspace
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.ownerShipTransferOfWorkspace = async (req, res, next) => {
+	let { workspaceId } = req.params;
+	let { memberId } = req.body;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		if (workspaceId) {
+			if (isValidObjectId(workspaceId)) {
+				const workspaceExists = await Workspace.exists({ _id: workspaceId });
+				if (workspaceExists) {
+					const doIHaveAccess = await Workspace.exists({
+						$and: [
+							{ _id: workspaceId },
+							{
+								teamMembers: {
+									$elemMatch: {
+										member: user._id,
+										role: "owner",
+									},
+								},
+							},
+						],
+					});
+					if (doIHaveAccess) {
+						if (memberId && isValidObjectId(memberId)) {
+							const userExists = await User.findOne({ _id: memberId }).select("_id");
+							if (userExists) {
+								const existsInWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": memberId }] });
+								if (existsInWorkspace) {
+									await Workspace.updateOne(
+										{
+											$and: [{ _id: workspaceId }, { "teamMembers.member": memberId }],
+										},
+										{ $set: { "teamMembers.$.role": "owner" } }
+									);
+
+									await Workspace.updateOne(
+										{
+											$and: [{ _id: workspaceId }, { "teamMembers.member": user._id }],
+										},
+										{ $set: { "teamMembers.$.role": "user" } }
+									);
+
+									return res.json({ message: "Successfully Transferred ownership of the workspace" });
+								} else {
+									issue.message = "The user is not exists in the workspace!";
+								}
+							} else {
+								issue.message = "Not found user!";
+							}
+						} else {
+							if (!memberId) {
+								issue.message = "Please provide member id!";
+							} else {
+								issue.message = "Provided member is invalid!";
+							}
+						}
+					} else {
+						issue.message = "You have no access to perform the operation!";
+					}
+				} else {
+					issue.message = "Workspace not found";
+				}
+			} else {
+				issue.message = "Invalid workspace id!";
+			}
+		} else {
+			issue.message = "Please provide workspace id!";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
  * TAGS CRUD ===============================================
  * =========================================================
  * =========================================================
