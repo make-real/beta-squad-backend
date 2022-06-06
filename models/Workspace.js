@@ -12,11 +12,13 @@ const workspaceSchema = new Schema(
 					member: {
 						type: Schema.Types.ObjectId,
 						ref: "User",
+						required: true,
 					},
 					role: {
 						type: String,
 						enum: ["owner", "admin", "user"],
 						default: "user",
+						required: true,
 					},
 				},
 			],
