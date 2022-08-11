@@ -221,7 +221,20 @@ exports.accountVerification = async (req, res, next) => {
 					if (matchedOtp) {
 						const update = await User.updateOne({ _id: userId }, { emailVerified: true });
 						if (update.modifiedCount) {
-							return res.json({ message: "Your email is successfully verified!" });
+							const sessionUUID = uuid();
+							const expireDate = new Date();
+							expireDate.setDate(expireDate.getDate() + 30);
+
+							const sessionStructure = new UserSession({
+								user: userId,
+								sessionUUID,
+								expireDate,
+							});
+
+							const session = await sessionStructure.save();
+
+							const jwtToken = createToken(session._id, sessionUUID);
+							return res.json({ message: "Your email is successfully verified!", jwtToken, loggedUser: userId });
 						}
 					} else {
 						issue.message = "Verification code was wrong!";
