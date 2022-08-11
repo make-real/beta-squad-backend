@@ -135,6 +135,8 @@ exports.sendMessage = async (req, res, next) => {
 					},
 				]);
 
+				global.io.to(String(spaceId)).emit("NEW_SPACE_MESSAGE_RECEIVED", getTheMessage);
+
 				res.status(201).json({ message: getTheMessage });
 
 				// Operation for unseen message update as seen
