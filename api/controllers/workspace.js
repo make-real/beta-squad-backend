@@ -133,6 +133,49 @@ exports.getWorkspaces = async (req, res, next) => {
 };
 
 /**
+ * Get single workspace
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.getSingleWorkspace = async (req, res, next) => {
+	let { workspaceId } = req.params;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		// check workspace id
+		if (workspaceId) {
+			if (isValidObjectId(workspaceId)) {
+				const workspaceExists = await Workspace.findOne({ _id: workspaceId });
+				if (workspaceExists) {
+					const doIHaveAccess = await Workspace.exists({
+						$and: [{ _id: workspaceId }, { "teamMembers.member": user._id }],
+					});
+					if (doIHaveAccess) {
+						return res.json({ workspace: workspaceExists });
+					} else {
+						issue.workspaceId = "You have no access in this Workspace!";
+					}
+				} else {
+					issue.workspaceId = "Workspace not found";
+				}
+			} else {
+				issue.workspaceId = "Invalid workspace id!";
+			}
+		} else {
+			issue.workspaceId = "Please provide workspace id!";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
  * Update workspace
  *
  * @param {express.Request} req Express request object
@@ -247,7 +290,8 @@ exports.updateWorkspace = async (req, res, next) => {
 				);
 
 				if (updateSpace.modifiedCount) {
-					return res.json({ message: "Successfully updated" });
+					const getUpdatedWorkspace = await Workspace.findOne({ _id: workspaceId });
+					return res.json({ message: "Successfully updated", workspace: getUpdatedWorkspace });
 				} else {
 					issue.space = "Failed to updated!";
 				}
