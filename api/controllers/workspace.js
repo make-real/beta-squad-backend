@@ -7,6 +7,9 @@ const Workspace = require("../../models/Workspace");
 const Space = require("../../models/Space");
 const Card = require("../../models/Card");
 const Tag = require("../../models/Tag");
+const List = require("../../models/List");
+const SpaceChat = require("../../models/SpaceChat");
+const Checklist = require("../../models/Checklist");
 
 /**
  * Create a workspace
@@ -299,6 +302,77 @@ exports.updateWorkspace = async (req, res, next) => {
 		}
 
 		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
+ * Delete workspace
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.deleteWorkspace = async (req, res, next) => {
+	let { workspaceId } = req.params;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		// check workspace id
+		if (workspaceId) {
+			if (isValidObjectId(workspaceId)) {
+				const workspaceExists = await Workspace.exists({ _id: workspaceId });
+				if (workspaceExists) {
+					const doIHaveAccessToUpdate = await Workspace.exists({
+						$and: [
+							{ _id: workspaceId },
+							{
+								teamMembers: {
+									$elemMatch: {
+										$or: [
+											{ member: user._id, role: "owner" },
+											{ member: user._id, role: "admin" },
+										],
+									},
+								},
+							},
+						],
+					});
+					if (doIHaveAccessToUpdate) {
+						const deleteSpace = await Workspace.deleteOne({ _id: workspaceId });
+						if (deleteSpace.deletedCount) {
+							res.json({ message: "Successfully deleted the workspace" });
+
+							const findSpaces = await Space.find({ workSpaceRef: workspaceId }).select("_id");
+							for (const space of findSpaces) {
+								await List.deleteMany({ spaceRef: space._id });
+								await SpaceChat.deleteMany({ to: space._id });
+								await Card.deleteMany({ spaceRef: space._id });
+								await Checklist.deleteMany({ spaceRef: space._id });
+							}
+							await Space.deleteMany({ workSpaceRef: workspaceId });
+						} else {
+							issue.space = "Failed to delete!";
+						}
+					} else {
+						issue.workspaceId = "You have no rights to delete the Workspace!";
+					}
+				} else {
+					issue.workspaceId = "Workspace not found";
+				}
+			} else {
+				issue.workspaceId = "Invalid workspace id!";
+			}
+		} else {
+			issue.workspaceId = "Please provide workspace id!";
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
 	} catch (err) {
 		next(err);
 	}
