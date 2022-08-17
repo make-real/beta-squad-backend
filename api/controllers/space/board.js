@@ -813,6 +813,57 @@ exports.copyCard = async (req, res, next) => {
 	}
 };
 
+exports.deleteCard = async (req, res, next) => {
+	let { spaceId, listId, cardId } = req.params;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		const isValidCardId = isValidObjectId(cardId);
+		if (isValidSpaceId && isValidListId && isValidCardId) {
+			const cardExists = await Card.findOne({ _id: cardId }).select("startDate spaceRef");
+			if (cardExists) {
+				const existsSpace = await Space.findOne({ _id: cardExists.spaceRef }).select("workSpaceRef");
+				if (existsSpace) {
+					const doIHaveAccess = await Space.exists({ $and: [{ _id: cardExists.spaceRef }, { "members.member": user._id }] });
+					if (doIHaveAccess) {
+						const deleteCard = await Card.deleteOne({ _id: cardId });
+						if (deleteCard.deletedCount) {
+							res.json({ message: "Successfully deleted card!" });
+							await Checklist.deleteMany({ cardRef: cardId });
+						} else {
+							issue.message = "Failed to delete card!";
+						}
+					} else {
+						issue.message = "You have no access to this space!";
+					}
+				} else {
+					issue.message = "Not found space!";
+				}
+			} else {
+				issue.message = "Not found card!";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.message = "Invalid space id!";
+			} else if (!isValidListId) {
+				issue.message = "Invalid list id!";
+			} else if (!isValidCardId) {
+				issue.message = "Invalid card id!";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
+
 exports.createChecklistItem = async (req, res, next) => {
 	let { spaceId, listId, cardId } = req.params;
 	let { content } = req.body;
