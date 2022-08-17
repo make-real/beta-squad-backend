@@ -2,6 +2,12 @@ const bcrypt = require("bcrypt");
 const { phone: phoneNumberValidator } = require("phone");
 const { isValidObjectId } = require("mongoose");
 const User = require("../../models/User");
+const Space = require("../../models/Space");
+const List = require("../../models/List");
+const Card = require("../../models/Card");
+const SpaceChat = require("../../models/SpaceChat");
+const Checklist = require("../../models/Checklist");
+const UserSession = require("../../models/UserSession");
 const { isValidEmail } = require("../../utils/func");
 const { imageCheck, upload } = require("../../utils/file");
 
@@ -255,6 +261,46 @@ exports.updateProfile = async (req, res, next) => {
 			}
 		}
 		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
+ * Delete user own self
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.deleteAccount = async (req, res, next) => {
+	try {
+		const user = req.user;
+
+		// find the spaces where manager im
+		const findSpaces = await Space.find({ members: { $elemMatch: { member: user._id, role: "manager" } } }).select("_id");
+
+		for (const space of findSpaces) {
+			await List.deleteMany({ spaceRef: space._id });
+			await SpaceChat.deleteMany({ to: space._id });
+			await Card.deleteMany({ spaceRef: space._id });
+			await Checklist.deleteMany({ spaceRef: space._id });
+			await Space.deleteOne({ _id: space._id });
+		}
+		await Space.updateMany(
+			{ members: { $elemMatch: { member: user._id, role: "member" } } },
+			{
+				$pull: {
+					members: {
+						member: user._id,
+					},
+				},
+			}
+		);
+		await UserSession.deleteMany({ user: user._id });
+		await User.deleteOne({ _id: user._id });
+
+		res.json({ message: "Your account has been deleted!" });
 	} catch (err) {
 		next(err);
 	}

@@ -65,7 +65,6 @@ function isValidEmail(email) {
 }
 
 async function usernameGenerating(email, forbiddenUsernames) {
-	console.log(this.name);
 	const User = require("../models/User");
 	forbiddenUsernames = forbiddenUsernames || ["account", "accounts", "user", "users", "api"];
 	const targetOfSlice = email.indexOf("@");
