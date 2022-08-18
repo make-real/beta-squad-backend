@@ -486,6 +486,63 @@ exports.addTeamMembers = async (req, res, next) => {
 };
 
 /**
+ * Get team members list of a workspace
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.teamMembers = async (req, res, next) => {
+	let { workspaceId } = req.params;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		if (workspaceId) {
+			if (isValidObjectId(workspaceId)) {
+				const workspaceExists = await Workspace.exists({ _id: workspaceId });
+				if (workspaceExists) {
+					const getWorkspace = await Workspace.findOne({ $and: [{ _id: workspaceId }, { "teamMembers.member": user._id }] })
+						.select("teamMembers")
+						.populate({
+							path: "teamMembers.member",
+							select: "fullName username avatar",
+						});
+					if (getWorkspace) {
+						let teamMembers = getWorkspace.teamMembers;
+						teamMembers = JSON.parse(JSON.stringify(teamMembers));
+						const members = [];
+						for (const singleItem of teamMembers) {
+							if (singleItem.member) {
+								members.push({
+									...singleItem.member,
+									role: singleItem.role,
+								});
+							}
+						}
+
+						return res.json({ teamMembers: members });
+					} else {
+						issue.message = "You have no access in this workspace!";
+					}
+				} else {
+					issue.message = "Workspace not found";
+				}
+			} else {
+				issue.message = "Invalid workspace id!";
+			}
+		} else {
+			issue.message = "Please provide workspace id!";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
  * Role Change and remove members of a workspace
  *
  * @param {express.Request} req Express request object
