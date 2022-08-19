@@ -778,6 +778,70 @@ exports.ownerShipTransferOfWorkspace = async (req, res, next) => {
 };
 
 /**
+ * Leave from workspace
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.leaveFromWorkspace = async (req, res, next) => {
+	let { workspaceId } = req.params;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		if (workspaceId) {
+			if (isValidObjectId(workspaceId)) {
+				const workspaceExists = await Workspace.exists({ _id: workspaceId });
+				if (workspaceExists) {
+					const amIExistsInWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": user._id }] });
+					if (amIExistsInWorkspace) {
+						// Leave from workspace
+						await Workspace.updateOne(
+							{ _id: workspaceId },
+							{
+								$pull: {
+									teamMembers: {
+										member: user._id,
+									},
+								},
+							}
+						);
+
+						// Also leave from the spaces of the Workspace
+						await Space.updateOne(
+							{ $and: [{ workSpaceRef: workspaceId }, { "members.member": user._id }] },
+							{
+								$pull: {
+									members: {
+										member: user._id,
+									},
+								},
+							}
+						);
+
+						return res.json({ message: "Successfully left from the workplace" });
+					} else {
+						issue.message = "You already leave from the workspace!";
+					}
+				} else {
+					issue.message = "Workspace not found";
+				}
+			} else {
+				issue.message = "Invalid workspace id!";
+			}
+		} else {
+			issue.message = "Please provide workspace id!";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
  * TAGS CRUD ===============================================
  * =========================================================
  * =========================================================

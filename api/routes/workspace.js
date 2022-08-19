@@ -1,7 +1,7 @@
 const workspaceRouter = require("express").Router();
 const multipart = require("connect-multiparty");
 
-const { createWorkspace, getWorkspaces, getSingleWorkspace, updateWorkspace, deleteWorkspace, addTeamMembers, teamMembers, roleChangeAndRemoveTeamMembers, ownerShipTransferOfWorkspace, createTags, getTags, editTags, deleteTags } = require("../controllers/workspace");
+const { createWorkspace, getWorkspaces, getSingleWorkspace, updateWorkspace, deleteWorkspace, addTeamMembers, teamMembers, roleChangeAndRemoveTeamMembers, ownerShipTransferOfWorkspace, leaveFromWorkspace, createTags, getTags, editTags, deleteTags } = require("../controllers/workspace");
 
 workspaceRouter.post("/", createWorkspace);
 workspaceRouter.get("/", getWorkspaces);
@@ -12,6 +12,7 @@ workspaceRouter.put("/:workspaceId/add-team-members", addTeamMembers);
 workspaceRouter.get("/:workspaceId/team-members", teamMembers);
 workspaceRouter.put("/:workspaceId/member-role", roleChangeAndRemoveTeamMembers);
 workspaceRouter.patch("/:workspaceId/ownership-transfer", ownerShipTransferOfWorkspace);
+workspaceRouter.put("/:workspaceId/leave", leaveFromWorkspace);
 
 // Tag CRUD
 workspaceRouter.post("/:workspaceId/tags", createTags);
