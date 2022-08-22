@@ -353,6 +353,7 @@ exports.deleteWorkspace = async (req, res, next) => {
 								await Card.deleteMany({ spaceRef: space._id });
 								await Checklist.deleteMany({ spaceRef: space._id });
 							}
+							await Tag.deleteMany({ workSpaceRef: workspaceId });
 							await Space.deleteMany({ workSpaceRef: workspaceId });
 						} else {
 							issue.space = "Failed to delete!";
