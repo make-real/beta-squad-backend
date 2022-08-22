@@ -3,6 +3,10 @@ const { isValidObjectId } = require("mongoose");
 const Workspace = require("../../../models/Workspace");
 const Space = require("../../../models/Space");
 const User = require("../../../models/User");
+const List = require("../../../models/List");
+const SpaceChat = require("../../../models/SpaceChat");
+const Card = require("../../../models/Card");
+const Checklist = require("../../../models/Checklist");
 
 /**
  * Create a space
@@ -292,6 +296,76 @@ exports.updateSpace = async (req, res, next) => {
 			} else {
 				issue.message = "Something is wrong!";
 			}
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
+ * Delete space
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.deleteSpace = async (req, res, next) => {
+	let { spaceId } = req.params;
+	try {
+		const user = req.user;
+		const issue = {};
+
+		if (spaceId) {
+			if (isValidObjectId(spaceId)) {
+				const spaceExists = await Space.findOne({ _id: spaceId }).select("workSpaceRef").populate({
+					path: "workSpaceRef",
+					select: "_id",
+				});
+
+				if (spaceExists) {
+					const workSpaceId = spaceExists.workSpaceRef?._id;
+					if (workSpaceId) {
+						const iAMAdminOfSpaceOfWorkspace = await Workspace.exists({
+							$and: [
+								{ _id: workSpaceId },
+								{
+									teamMembers: {
+										$elemMatch: {
+											$or: [
+												{ member: user._id, role: "owner" },
+												{ member: user._id, role: "admin" },
+											],
+										},
+									},
+								},
+							],
+						});
+						const iAMManagerOfTheSpace = await Space.exists({ $and: [{ _id: spaceExists._id }, { members: { $elemMatch: { member: user._id, role: "manager" } } }] });
+
+						if (iAMAdminOfSpaceOfWorkspace || iAMManagerOfTheSpace) {
+							await List.deleteMany({ spaceRef: spaceExists._id });
+							await SpaceChat.deleteMany({ to: spaceExists._id });
+							await Card.deleteMany({ spaceRef: spaceExists._id });
+							await Checklist.deleteMany({ spaceRef: spaceExists._id });
+							await Space.deleteOne({ _id: spaceExists._id });
+
+							return res.json({ message: "Successfully deleted the space" });
+						} else {
+							issue.message = "You have no access to perform this operation!";
+						}
+					} else {
+						issue.message = "Something is wrong!";
+					}
+				} else {
+					issue.spaceId = "Already deleted the Space";
+				}
+			} else {
+				issue.spaceId = "Invalid space id!";
+			}
+		} else {
+			issue.spaceId = "Please provide space id!";
 		}
 
 		return res.status(400).json({ issue });
