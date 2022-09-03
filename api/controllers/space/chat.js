@@ -433,6 +433,7 @@ exports.messageDelete = async (req, res, next) => {
 		if (isValidSpaceId && isValidMessageId) {
 			const messageExists = await SpaceChat.findOne({ _id: messageId }).select("to");
 			if (messageExists) {
+				spaceId = messageExists.to;
 				const doAccessToDelete = await Space.exists({ $and: [{ _id: messageExists.to }, { "members.member": user._id }] });
 				const doAccessToDelete1 = await SpaceChat.exists({ $and: [{ _id: messageId }, { sender: user._id }] });
 				if (doAccessToDelete && doAccessToDelete1) {
@@ -465,13 +466,35 @@ exports.messageDelete = async (req, res, next) => {
 			);
 
 			if (deleteMessage.modifiedCount) {
-				return res.json({ message: "Successfully deleted the message!" });
+				res.json({ message: "Successfully deleted the message!" });
+
+				// message deleted event Emitting realtime to the users
+				const space = await Space.findOne({ _id: spaceId }).select("members.member");
+				if (space) {
+					const memberIds = [];
+					for (const item of space.members) {
+						memberIds.push(item.member);
+					}
+					const socketIds = await User.find({ $and: [{ _id: { $in: memberIds } }, { socketId: { $ne: null } }] })
+						.select("socketId")
+						.distinct("socketId");
+
+					const data = {
+						spaceId,
+						messageId,
+					};
+					for (const socketId of socketIds) {
+						global.io.to(socketId).emit("ON_MESSAGE_REMOVED", data);
+					}
+				}
 			} else {
 				issue.message = "Failed to delete!";
 			}
 		}
 
-		return res.status(400).json({ issue });
+		if (!res.headersSent) {
+			return res.status(400).json({ issue });
+		}
 	} catch (err) {
 		next(err);
 	}
