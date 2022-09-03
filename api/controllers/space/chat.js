@@ -492,6 +492,7 @@ exports.messageReaction = async (req, res, next) => {
 		if (isValidSpaceId && isValidMessageId) {
 			const messageExists = await SpaceChat.findOne({ _id: messageId }).select("to");
 			if (messageExists) {
+				spaceId = messageExists.to;
 				const doAccessToReaction = await Space.exists({ $and: [{ _id: messageExists.to }, { "members.member": user._id }] });
 				if (doAccessToReaction) {
 					const isDeleted = await SpaceChat.exists({ $and: [{ _id: messageId }, { deleted: true }] });
@@ -565,13 +566,43 @@ exports.messageReaction = async (req, res, next) => {
 					path: "reactions.reactor",
 					select: "fullName username avatar",
 				});
-				return res.json({ reactions: getReactions.reactions });
+				res.json({ reactions: getReactions.reactions });
+
+				// reaction Emitting/Sending realtime to the users
+				const space = await Space.findOne({ _id: spaceId }).select("members.member");
+				if (space) {
+					const memberIds = [];
+					for (const item of space.members) {
+						memberIds.push(item.member);
+					}
+					const socketIds = await User.find({ $and: [{ _id: { $in: memberIds } }, { socketId: { $ne: null } }] })
+						.select("socketId")
+						.distinct("socketId");
+
+					const data = {
+						spaceId,
+						messageId,
+						react: {
+							reactor: {
+								_id: user._id,
+								fullName: user.fullName,
+								username: user.username,
+							},
+							reaction,
+						},
+					};
+					for (const socketId of socketIds) {
+						global.io.to(socketId).emit("NEW_REACTION_RECEIVED", data);
+					}
+				}
 			} else {
 				issue.message = "Failed to react!";
 			}
 		}
 
-		return res.status(400).json({ issue });
+		if (!res.headersSent) {
+			return res.status(400).json({ issue });
+		}
 	} catch (err) {
 		next(err);
 	}
