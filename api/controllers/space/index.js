@@ -128,7 +128,7 @@ exports.createSpace = async (req, res, next) => {
  * @param {() => } next Express callback
  */
 exports.getSpaces = async (req, res, next) => {
-	let { workspaceId, limit, skip } = req.query;
+	let { workspaceId, search: searchKeyWord, limit, skip } = req.query;
 	try {
 		limit = parseInt(limit) || 20;
 		skip = parseInt(skip) || 0;
@@ -137,7 +137,16 @@ exports.getSpaces = async (req, res, next) => {
 
 		if (workspaceId) {
 			if (isValidObjectId(workspaceId)) {
-				const getSpace = await Space.find({ $and: [{ "members.member": user._id }, { workSpaceRef: workspaceId }] })
+				let searchQuery = {};
+				if (searchKeyWord) {
+					function es(str) {
+						return str.replace(/[-\/\\^$*+?()|[\]{}]/g, "");
+					}
+					const KeyWordRegExp = new RegExp("^" + es(searchKeyWord), "i"); // Match from starting
+					searchQuery = { name: KeyWordRegExp };
+				}
+
+				const getSpace = await Space.find({ $and: [{ "members.member": user._id }, { workSpaceRef: workspaceId }, searchQuery] })
 					.sort({ createdAt: -1 })
 					.select("-workSpaceRef")
 					.skip(skip)
