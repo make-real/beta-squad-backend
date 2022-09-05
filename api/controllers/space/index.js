@@ -7,6 +7,7 @@ const List = require("../../../models/List");
 const SpaceChat = require("../../../models/SpaceChat");
 const Card = require("../../../models/Card");
 const Checklist = require("../../../models/Checklist");
+const CommentChat = require("../../../models/CommentChat");
 
 /**
  * Create a space
@@ -358,6 +359,7 @@ exports.deleteSpace = async (req, res, next) => {
 							await SpaceChat.deleteMany({ to: spaceExists._id });
 							await Card.deleteMany({ spaceRef: spaceExists._id });
 							await Checklist.deleteMany({ spaceRef: spaceExists._id });
+							await CommentChat.deleteMany({ spaceRef: spaceExists._id });
 							await Space.deleteOne({ _id: spaceExists._id });
 
 							return res.json({ message: "Successfully deleted the space" });

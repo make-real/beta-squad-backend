@@ -7,6 +7,7 @@ const List = require("../../models/List");
 const Card = require("../../models/Card");
 const SpaceChat = require("../../models/SpaceChat");
 const Checklist = require("../../models/Checklist");
+const CommentChat = require("../../models/CommentChat");
 const UserSession = require("../../models/UserSession");
 const { isValidEmail } = require("../../utils/func");
 const { imageCheck, upload } = require("../../utils/file");
@@ -285,6 +286,7 @@ exports.deleteAccount = async (req, res, next) => {
 			await SpaceChat.deleteMany({ to: space._id });
 			await Card.deleteMany({ spaceRef: space._id });
 			await Checklist.deleteMany({ spaceRef: space._id });
+			await CommentChat.deleteMany({ spaceRef: space._id });
 		}
 		await Space.deleteOne({ members: { $elemMatch: { member: user._id, role: "manager" } } });
 		await Space.updateMany(

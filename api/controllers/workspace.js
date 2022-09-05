@@ -10,6 +10,7 @@ const Tag = require("../../models/Tag");
 const List = require("../../models/List");
 const SpaceChat = require("../../models/SpaceChat");
 const Checklist = require("../../models/Checklist");
+const CommentChat = require("../../models/CommentChat");
 
 /**
  * Create a workspace
@@ -352,6 +353,7 @@ exports.deleteWorkspace = async (req, res, next) => {
 								await SpaceChat.deleteMany({ to: space._id });
 								await Card.deleteMany({ spaceRef: space._id });
 								await Checklist.deleteMany({ spaceRef: space._id });
+								await CommentChat.deleteMany({ spaceRef: space._id });
 							}
 							await Tag.deleteMany({ workSpaceRef: workspaceId });
 							await Space.deleteMany({ workSpaceRef: workspaceId });

@@ -4,8 +4,10 @@ const Space = require("../../../models/Space");
 const List = require("../../../models/List");
 const Card = require("../../../models/Card");
 const Checklist = require("../../../models/Checklist");
+const CommentChat = require("../../../models/CommentChat");
 const Tag = require("../../../models/Tag");
 const { multipleFilesCheckAndUpload } = require("../../../utils/file");
+const { splitSpecificParts } = require("../../../utils/func");
 
 exports.createList = async (req, res, next) => {
 	let { spaceId } = req.params;
@@ -187,6 +189,7 @@ exports.deleteList = async (req, res, next) => {
 							const findCard = await Card.find({ listRef: listId }).select("_id");
 							for (const card of findCard) {
 								await Checklist.deleteMany({ cardRef: card._id });
+								await CommentChat.deleteMany({ to: card._id });
 							}
 							await Card.deleteMany({ listRef: listId });
 						} else {
@@ -834,6 +837,7 @@ exports.deleteCard = async (req, res, next) => {
 						if (deleteCard.deletedCount) {
 							res.json({ message: "Successfully deleted card!" });
 							await Checklist.deleteMany({ cardRef: cardId });
+							await CommentChat.deleteMany({ to: cardId });
 						} else {
 							issue.message = "Failed to delete card!";
 						}
@@ -1127,6 +1131,181 @@ exports.deleteChecklistItem = async (req, res, next) => {
 				issue.cardId = "Invalid card id!";
 			} else if (!isValidChecklistId) {
 				issue.cardId = "Invalid checklist item id!";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
+
+exports.createComment = async (req, res, next) => {
+	let { textMessage, replayOf } = req.body;
+	let mentionedUsers = [],
+		attachmentsUrls = [];
+	let { spaceId, listId, cardId } = req.params;
+	try {
+		const user = req.user;
+		const issue = {};
+
+		let textMessageOk, attachmentsOk, spaceIdOk, listIdOk, cardIdOk, replayOfOk;
+
+		// text message check
+		if (textMessage) {
+			textMessage = String(textMessage).replace(/  +/g, " ").trim();
+			const splitIds = splitSpecificParts(textMessage, "{{", "}}");
+			const ids = [];
+			for (const id of splitIds) {
+				if (isValidObjectId(id)) {
+					ids.push(id);
+				}
+			}
+			if (ids.length > 0) {
+				const validMentionedUsers = await User.find({ _id: { $in: ids } }).select("_id");
+				for (const user of validMentionedUsers) {
+					mentionedUsers.push(user._id);
+				}
+			}
+			textMessageOk = true;
+		} else {
+			textMessageOk = true;
+		}
+
+		// check spaceId, listId, cardId
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		const isValidCardId = isValidObjectId(cardId);
+		if (isValidSpaceId && isValidListId && isValidCardId) {
+			listIdOk = true;
+			const getCard = await Card.findOne({ _id: cardId }).select("spaceRef");
+			if (getCard) {
+				cardIdOk = true;
+				spaceId = getCard.spaceRef;
+				const spaceExists = await Space.exists({ _id: spaceId });
+				if (spaceExists) {
+					const doIHaveAccessToSendMessage = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
+					if (doIHaveAccessToSendMessage) {
+						spaceIdOk = true;
+					} else {
+						issue.spaceId = "You are not a member of the space!!";
+					}
+				} else {
+					issue.spaceId = "Not found space";
+				}
+			} else {
+				issue.cardId = "Not found card";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.spaceId = "Invalid space id";
+			}
+			if (!isValidListId) {
+				issue.listId = "Invalid list id";
+			}
+			if (!isValidCardId) {
+				issue.cardId = "Invalid card id";
+			}
+		}
+
+		// replayOf id check
+		if (replayOf) {
+			if (isValidSpaceId) {
+				if (isValidObjectId(replayOf)) {
+					const commentChatExists = await CommentChat.exists({ $and: [{ _id: replayOf }, { to: cardId }] });
+					replayOfOk = true;
+					replayOf = commentChatExists ? replayOf : undefined;
+				} else {
+					issue.replayOf = "Invalid replayOf id";
+				}
+			}
+		} else {
+			replayOfOk = true;
+		}
+
+		if (textMessageOk && spaceIdOk && listIdOk && cardIdOk && replayOfOk) {
+			const files = req.files;
+			if (files) {
+				if (files.attachments) {
+					const { filesUrl, errorMessage } = await multipleFilesCheckAndUpload(files.attachments);
+					if (!errorMessage) {
+						attachmentsUrls = filesUrl;
+						attachmentsOk = true;
+					} else {
+						issue.attachments = errorMessage;
+					}
+				} else {
+					attachmentsOk = true;
+				}
+			} else {
+				attachmentsOk = true;
+			}
+
+			if (attachmentsOk) {
+				const SpaceChatStructure = new CommentChat({
+					sender: user._id,
+					to: cardId,
+					spaceRef: spaceId,
+					replayOf,
+					content: {
+						text: textMessage,
+						attachments: attachmentsUrls,
+						mentionedUsers,
+					},
+				});
+
+				const saveMessage = await SpaceChatStructure.save();
+
+				const getTheComment = await CommentChat.findOne({ _id: saveMessage._id }).populate([
+					{
+						path: "sender",
+						select: "fullName username avatar",
+					},
+					{
+						path: "replayOf",
+						select: "content editedAt createdAt",
+						populate: [
+							{
+								path: "sender",
+								select: "fullName username avatar",
+							},
+							{
+								path: "content.mentionedUsers",
+								select: "fullName username avatar",
+							},
+						],
+					},
+					{
+						path: "content.mentionedUsers",
+						select: "fullName username avatar",
+					},
+					{
+						path: "seen",
+						select: "fullName username avatar",
+					},
+					{
+						path: "reactions.reactor",
+						select: "fullName username avatar",
+					},
+				]);
+
+				res.status(201).json({ comment: getTheComment });
+
+				// Operation for unseen message update as seen
+				CommentChat.updateMany(
+					{
+						$and: [
+							{ to: cardId },
+							{
+								$nor: [{ sender: user._id }, { seen: user._id }],
+							},
+						],
+					},
+					{ $push: { seen: user._id } }
+				).then();
+				// Operation End
 			}
 		}
 
