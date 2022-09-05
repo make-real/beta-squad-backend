@@ -1316,3 +1316,105 @@ exports.createComment = async (req, res, next) => {
 		next(err);
 	}
 };
+
+exports.getComments = async (req, res, next) => {
+	let { spaceId, listId, cardId } = req.params;
+	let { skip, limit } = req.query;
+	try {
+		limit = parseInt(limit) || 20;
+		skip = parseInt(skip) || 0;
+		const user = req.user;
+		const issue = {};
+
+		// check spaceId, listId, cardId
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		const isValidCardId = isValidObjectId(cardId);
+		if (isValidSpaceId && isValidListId && isValidCardId) {
+			const getCard = await Card.findOne({ _id: cardId }).select("spaceRef");
+			if (getCard) {
+				spaceId = getCard.spaceRef;
+				const spaceExists = await Space.exists({ _id: spaceId });
+				if (spaceExists) {
+					const doIHaveAccess = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
+					if (doIHaveAccess) {
+						const getTheComments = await CommentChat.find({ $and: [{ to: cardId }, { deleted: false }] })
+							.sort({ createdAt: -1 })
+							.populate([
+								{
+									path: "sender",
+									select: "fullName username avatar",
+								},
+								{
+									path: "replayOf",
+									select: "content editedAt createdAt",
+									populate: [
+										{
+											path: "sender",
+											select: "fullName username avatar",
+										},
+										{
+											path: "content.mentionedUsers",
+											select: "fullName username avatar",
+										},
+									],
+								},
+								{
+									path: "content.mentionedUsers",
+									select: "fullName username avatar",
+								},
+								{
+									path: "seen",
+									select: "fullName username avatar",
+								},
+								{
+									path: "reactions.reactor",
+									select: "fullName username avatar",
+								},
+							])
+							.skip(skip)
+							.limit(limit);
+
+						res.json({ comments: getTheComments });
+
+						// Operation for unseen message update as seen
+						CommentChat.updateMany(
+							{
+								$and: [
+									{ to: cardId },
+									{
+										$nor: [{ sender: user._id }, { seen: user._id }],
+									},
+								],
+							},
+							{ $push: { seen: user._id } }
+						).then();
+						// Operation End
+					} else {
+						issue.spaceId = "You are not a member of the space!!";
+					}
+				} else {
+					issue.spaceId = "Not found space";
+				}
+			} else {
+				issue.cardId = "Not found card";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.spaceId = "Invalid space id";
+			}
+			if (!isValidListId) {
+				issue.listId = "Invalid list id";
+			}
+			if (!isValidCardId) {
+				issue.cardId = "Invalid card id";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
