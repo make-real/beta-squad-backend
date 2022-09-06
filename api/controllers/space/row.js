@@ -4,7 +4,7 @@ const Card = require("../../../models/Card");
 
 exports.getCardsAsRows = async (req, res, next) => {
 	let { spaceId } = req.params;
-	let { skip, limit, sortBy, sort } = req.query;
+	let { skip, limit, sortBy, sort, search } = req.query;
 	try {
 		limit = parseInt(limit) || undefined;
 		skip = parseInt(skip) || 0;
@@ -37,7 +37,13 @@ exports.getCardsAsRows = async (req, res, next) => {
 						}
 					}
 
-					const getCards = await Card.find({ spaceRef: spaceId })
+					let searchQuery = {};
+					if (search) {
+						const KeyWordRegExp = new RegExp("^" + search.replace(/[-\/\\^$*+?()|[\]{}]/g, ""), "i"); // Match from starting
+						searchQuery = { name: KeyWordRegExp };
+					}
+
+					const getCards = await Card.find({ $and: [{ spaceRef: spaceId }, searchQuery] })
 						.select("name progress tags startDate endDate spaceRef listRef")
 						.sort(sortObj)
 						.populate([
