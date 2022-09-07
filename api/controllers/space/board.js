@@ -419,10 +419,10 @@ exports.getSingleCard = async (req, res, next) => {
 
 exports.updateCard = async (req, res, next) => {
 	let { spaceId, listId, cardId } = req.params;
-	let { name, description, progress, tagId, startDate, endDate, assignUser, removeAssignedUser, removeAttachmentUrl } = req.body;
+	let { name, description, progress, tagId, startDate, endDate, assignUser, removeAssignedUser, removeAttachmentUrl, removeTagId } = req.body;
 
 	try {
-		let nameOk, descriptionOk, progressOk, tagIdOk, startDateOk, endDateOk, assignUserOk, removeAssignedUserOk;
+		let nameOk, descriptionOk, progressOk, tagIdOk, startDateOk, endDateOk, assignUserOk, removeAssignedUserOk, removeTagIdOk;
 		const user = req.user;
 		const issue = {};
 
@@ -592,7 +592,24 @@ exports.updateCard = async (req, res, next) => {
 							removeAssignedUserOk = true;
 						}
 
-						if (nameOk && descriptionOk && progressOk && tagIdOk && startDateOk && endDateOk && assignUserOk && removeAssignedUserOk) {
+						// removeTagId check
+						if (removeTagId) {
+							if (isValidObjectId(removeTagId)) {
+								const tagExists = await Card.exists({ $and: [{ _id: cardId }, { tags: removeTagId }] });
+								if (tagExists) {
+									removeTagIdOk = true;
+								} else {
+									issue.removeTagId = "The tag is not assigned to the card!";
+								}
+							} else {
+								issue.removeTagId = "Invalid removeTagId id!";
+							}
+						} else {
+							removeTagId = undefined;
+							removeTagIdOk = true;
+						}
+
+						if (nameOk && descriptionOk && progressOk && tagIdOk && startDateOk && endDateOk && assignUserOk && removeAssignedUserOk && removeTagIdOk) {
 							let attachmentsUrl;
 							let attachmentsOk;
 							const files = req.files;
@@ -627,6 +644,7 @@ exports.updateCard = async (req, res, next) => {
 											attachments: attachmentsUrl,
 										},
 										$pull: {
+											tags: removeTagId,
 											attachments: removeAttachmentUrl,
 											assignee: removeAssignedUser,
 										},
