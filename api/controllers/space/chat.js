@@ -544,7 +544,7 @@ exports.messageReaction = async (req, res, next) => {
 				reaction = String(reaction).replace(/  +/g, "").trim();
 				reactionOk = true;
 			} else {
-				issue.message = "Please your reaction!";
+				issue.message = "Please provide your reaction!";
 			}
 		}
 

@@ -1630,3 +1630,111 @@ exports.commentsDelete = async (req, res, next) => {
 		next(err);
 	}
 };
+
+exports.commentsReaction = async (req, res, next) => {
+	let { spaceId, listId, cardId, commentId } = req.params;
+	let { reaction } = req.body;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		// check spaceId, listId, cardId, commentId
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		const isValidCardId = isValidObjectId(cardId);
+		const isValidCommentId = isValidObjectId(commentId);
+		if (isValidSpaceId && isValidListId && isValidCardId && isValidCommentId) {
+			const getComment = await CommentChat.findOne({ _id: commentId }).select("spaceRef");
+			if (getComment) {
+				spaceId = getComment.spaceRef;
+				const spaceExists = await Space.exists({ _id: spaceId });
+				if (spaceExists) {
+					const doIHaveAccess = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
+					if (doIHaveAccess) {
+						// check the reaction
+						let reactionOk;
+						if (reaction) {
+							reaction = String(reaction).replace(/  +/g, "").trim();
+							reactionOk = true;
+						} else {
+							issue.message = "Please provide your reaction!";
+						}
+
+						if (reactionOk) {
+							const isAlreadyReacted = await CommentChat.exists({
+								$and: [
+									{ _id: commentId },
+									{
+										reactions: {
+											$elemMatch: { reactor: user._id },
+										},
+									},
+								],
+							});
+
+							let updateReaction;
+							if (isAlreadyReacted) {
+								// Update reaction
+								updateReaction = await CommentChat.updateOne(
+									{
+										$and: [{ _id: commentId }, { "reactions.reactor": user._id }],
+									},
+									{ $set: { "reactions.$.reaction": reaction } }
+								);
+							} else {
+								// Push reaction
+								updateReaction = await CommentChat.updateOne(
+									{ _id: commentId },
+									{
+										$push: {
+											reactions: {
+												reactor: user._id,
+												reaction,
+											},
+										},
+									}
+								);
+							}
+
+							if (updateReaction.modifiedCount) {
+								const getReactions = await CommentChat.findOne({ _id: commentId }).select("reactions").populate({
+									path: "reactions.reactor",
+									select: "fullName username avatar",
+								});
+								res.json({ reactions: getReactions.reactions });
+							} else {
+								issue.message = "Failed to react!";
+							}
+						}
+					} else {
+						issue.spaceId = "You are not a member of the space!!";
+					}
+				} else {
+					issue.spaceId = "Not found space";
+				}
+			} else {
+				issue.cardId = "Not found comment";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.spaceId = "Invalid space id";
+			}
+			if (!isValidListId) {
+				issue.listId = "Invalid list id";
+			}
+			if (!isValidCardId) {
+				issue.cardId = "Invalid card id";
+			}
+			if (!isValidCommentId) {
+				issue.commentId = "Invalid comment id";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
