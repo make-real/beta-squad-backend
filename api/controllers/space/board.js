@@ -1436,3 +1436,128 @@ exports.getComments = async (req, res, next) => {
 		next(err);
 	}
 };
+
+exports.commentsEdit = async (req, res, next) => {
+	let { spaceId, listId, cardId, commentId } = req.params;
+	let { updateComment } = req.body;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		// check spaceId, listId, cardId, commentId
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		const isValidCardId = isValidObjectId(cardId);
+		const isValidCommentId = isValidObjectId(commentId);
+		if (isValidSpaceId && isValidListId && isValidCardId && isValidCommentId) {
+			const getComment = await CommentChat.findOne({ _id: commentId }).select("spaceRef");
+			if (getComment) {
+				spaceId = getComment.spaceRef;
+				const spaceExists = await Space.exists({ _id: spaceId });
+				if (spaceExists) {
+					const doIHaveAccess = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
+					const doAccessToEdit1 = await CommentChat.exists({ $and: [{ _id: commentId }, { sender: user._id }] });
+					if (doIHaveAccess && doAccessToEdit1) {
+						// text comment check
+						if (updateComment) {
+							updateComment = String(updateComment).replace(/  +/g, " ").trim();
+							const splitIds = splitSpecificParts(updateComment, "{{", "}}");
+							const ids = [];
+							for (const id of splitIds) {
+								if (isValidObjectId(id)) {
+									ids.push(id);
+								}
+							}
+							let mentionedUsers = [];
+							if (ids.length > 0) {
+								const validMentionedUsers = await User.find({ _id: { $in: ids } }).select("_id");
+								for (const user of validMentionedUsers) {
+									mentionedUsers.push(user._id);
+								}
+							}
+
+							const commentUpdate = await CommentChat.updateOne(
+								{ _id: commentId },
+								{
+									"content.text": updateComment,
+									"content.mentionedUsers": mentionedUsers,
+									editedAt: Date.now(),
+								}
+							);
+
+							if (commentUpdate.modifiedCount) {
+								const getEditedComment = await CommentChat.findOne({ _id: commentId }).populate([
+									{
+										path: "sender",
+										select: "fullName username avatar",
+									},
+									{
+										path: "replayOf",
+										select: "content editedAt createdAt",
+										populate: [
+											{
+												path: "sender",
+												select: "fullName username avatar",
+											},
+											{
+												path: "content.mentionedUsers",
+												select: "fullName username avatar",
+											},
+										],
+									},
+									{
+										path: "content.mentionedUsers",
+										select: "fullName username avatar",
+									},
+									{
+										path: "seen",
+										select: "fullName username avatar",
+									},
+									{
+										path: "reactions.reactor",
+										select: "fullName username avatar",
+									},
+								]);
+								res.json({ editedComment: getEditedComment });
+							} else {
+								issue.message = "Failed to edit!";
+							}
+						} else {
+							issue.message = "Please provide your updated comment!";
+						}
+					} else {
+						if (!doIHaveAccess) {
+							issue.spaceId = "You are not a member of the space!!";
+						} else {
+							issue.commentId = "Unable to perform the operation!";
+						}
+					}
+				} else {
+					issue.spaceId = "Not found space";
+				}
+			} else {
+				issue.cardId = "Not found comment";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.spaceId = "Invalid space id";
+			}
+			if (!isValidListId) {
+				issue.listId = "Invalid list id";
+			}
+			if (!isValidCardId) {
+				issue.cardId = "Invalid card id";
+			}
+			if (!isValidCommentId) {
+				issue.commentId = "Invalid comment id";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
