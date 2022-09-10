@@ -966,7 +966,7 @@ exports.createChecklistItem = async (req, res, next) => {
 
 exports.updateChecklistItem = async (req, res, next) => {
 	let { spaceId, listId, cardId, checklistId } = req.params;
-	let { content, check, assignUser, removeAssignedUser } = req.body;
+	let { content, checked: check, assignUser, removeAssignedUser } = req.body;
 
 	try {
 		let contentOk, assignUserOk, removeAssignedUserOk;
