@@ -24,6 +24,7 @@ const spaceChatSchema = new Schema(
 						type: String,
 					},
 				],
+				voice: String,
 				mentionedUsers: [
 					{
 						type: Schema.Types.ObjectId,

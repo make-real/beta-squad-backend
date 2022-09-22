@@ -2,19 +2,20 @@ const { isValidObjectId } = require("mongoose");
 const Space = require("../../../models/Space");
 const SpaceChat = require("../../../models/SpaceChat");
 const { splitSpecificParts } = require("../../../utils/func");
-const { multipleFilesCheckAndUpload } = require("../../../utils/file");
+const { multipleFilesCheckAndUpload, upload } = require("../../../utils/file");
 const User = require("../../../models/User");
 
 exports.sendMessage = async (req, res, next) => {
 	let { textMessage, replayOf } = req.body;
 	let mentionedUsers = [],
-		attachmentsUrls = [];
+		attachmentsUrls = [],
+		voiceUrl;
 	let { spaceId } = req.params;
 	try {
 		const user = req.user;
 		const issue = {};
 
-		let textMessageOk, attachmentsOk, spaceIdOk, replayOfOk;
+		let textMessageOk, attachmentsOk, voiceOk, spaceIdOk, replayOfOk;
 
 		// text message check
 		if (textMessage) {
@@ -84,11 +85,28 @@ exports.sendMessage = async (req, res, next) => {
 				} else {
 					attachmentsOk = true;
 				}
+
+				if (files.voice) {
+					if (files.voice.path) {
+						const uploadResult = await upload(files.voice.path);
+						if (uploadResult.secure_url) {
+							voiceUrl = uploadResult.secure_url;
+							voiceOk = true;
+						} else {
+							issue.voice = uploadResult.message;
+						}
+					} else {
+						issue.voice = "Something went wrong with the voice file.";
+					}
+				} else {
+					voiceOk = true;
+				}
 			} else {
 				attachmentsOk = true;
+				voiceOk = true;
 			}
 
-			if (attachmentsOk) {
+			if (attachmentsOk && voiceOk) {
 				const SpaceChatStructure = new SpaceChat({
 					sender: user._id,
 					to: spaceId,
@@ -96,6 +114,7 @@ exports.sendMessage = async (req, res, next) => {
 					content: {
 						text: textMessage,
 						attachments: attachmentsUrls,
+						voice: voiceUrl,
 						mentionedUsers,
 					},
 				});
