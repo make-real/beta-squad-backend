@@ -268,7 +268,7 @@ exports.getMessages = async (req, res, next) => {
 
 exports.memberListToMention = async (req, res, next) => {
 	let { spaceId } = req.params;
-	let { skip, limit } = req.query;
+	let { skip, limit, search } = req.query;
 	try {
 		limit = parseInt(limit) || 100;
 		skip = parseInt(skip) || 0;
@@ -280,29 +280,39 @@ exports.memberListToMention = async (req, res, next) => {
 			if (spaceExists) {
 				const doIHaveAccess = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
 				if (doIHaveAccess) {
-					const getMemberOfSpace = await Space.findOne(
-						{ _id: spaceId },
-						{
-							members: { $slice: [skip, limit] },
+					let searchQuery = {};
+					if (search) {
+						function es(str) {
+							return str.replace(/[-\/\\^$*+?()|[\]{}]/g, "");
 						}
-					)
+						const KeyWordRegExp = new RegExp(".*" + es(search) + ".*", "i"); // Match any word of the name
+						searchQuery = { $or: [{ fullName: KeyWordRegExp }, { username: KeyWordRegExp }, { email: KeyWordRegExp }] };
+					}
+
+					const getMemberOfSpace = await Space.findOne({ _id: spaceId })
 						.select("+members -name -description -privacy -color -workSpaceRef")
 						.populate({
 							path: "members",
 							populate: {
 								path: "member",
-								select: "fullName username avatar",
+								select: "_id",
 							},
 						});
 
 					const spaceMembers = getMemberOfSpace.members;
-					const members = [];
+					const membersId = [];
 					for (const single of spaceMembers) {
+						console.log(single);
 						if (single.member) {
 							const member = single.member;
-							members.push(member);
+							membersId.push(member._id);
 						}
 					}
+
+					const members = await User.find({ $and: [{ _id: { $in: membersId } }, searchQuery] })
+						.select("fullName username avatar")
+						.skip(skip)
+						.limit(limit);
 
 					return res.json({ users: members });
 				} else {
