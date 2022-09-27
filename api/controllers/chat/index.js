@@ -233,3 +233,72 @@ exports.sendMessage = async (req, res, next) => {
 		next(err);
 	}
 };
+
+exports.getChatList = async (req, res, next) => {
+	const { workspaceId } = req.params;
+	let { skip, limit } = req.query;
+	try {
+		limit = parseInt(limit) || 20;
+		skip = parseInt(skip) || 0;
+		const user = req.user;
+		const issue = {};
+
+		if (workspaceId) {
+			if (isValidObjectId(workspaceId)) {
+				const existsWorkspace = await Workspace.exists({ _id: workspaceId });
+				if (existsWorkspace) {
+					const doIHaveAccessToGetTag = await Workspace.exists({
+						$and: [
+							{ _id: workspaceId },
+							{
+								"teamMembers.member": user._id,
+							},
+						],
+					});
+
+					if (doIHaveAccessToGetTag) {
+						const chatHeaders = await ChatHeader.find({ $and: [{ workSpaceRef: workspaceId }, { "participants.user": user._id }] })
+							.populate({
+								path: "participants.user",
+								select: "fullName username avatar",
+							})
+							.sort({ lastMessageTime: -1 })
+							.skip(skip)
+							.limit(limit);
+
+						const chatLists = [];
+						for (const chatHeader of chatHeaders) {
+							let participant;
+							if (String(chatHeader?.participants[0]?.user?._id) === String(user._id)) {
+								participant = chatHeader?.participants[1]?.user;
+							} else if (String(chatHeader?.participants[1]?.user?._id) === String(user._id)) {
+								participant = chatHeader?.participants[0]?.user;
+							}
+							chatLists.push({
+								_id: chatHeader._id,
+								participant,
+								workSpaceRef: chatHeader.workSpaceRef,
+								createdAt: chatHeader.createdAt,
+								updatedAt: chatHeader.updatedAt,
+							});
+						}
+
+						return res.json({ chatLists });
+					} else {
+						issue.message = "You are not a team member of the workplace!";
+					}
+				} else {
+					issue.workspaceId = "Not found workspace";
+				}
+			} else {
+				issue.workspaceId = "Please provide workspace mongoose object ID";
+			}
+		} else {
+			issue.workspaceId = "Please provide workspace Id";
+		}
+
+		res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
