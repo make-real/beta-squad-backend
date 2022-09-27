@@ -7,7 +7,8 @@ const User = require("../../../models/User");
 const Workspace = require("../../../models/Workspace");
 
 exports.sendMessage = async (req, res, next) => {
-	let { workspaceId, sendTo, textMessage, replayOf } = req.body;
+	const { workspaceId } = req.params;
+	let { sendTo, textMessage, replayOf } = req.body;
 
 	let mentionedUsers = [],
 		attachmentsUrls = [],
