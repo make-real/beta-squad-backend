@@ -16,7 +16,7 @@ exports.userAuthorization = async (req, res, next) => {
 						$and: [{ _id: jwt_payload.sessionId }, { sessionUUID: jwt_payload.sessionUUID }],
 					}).populate({
 						path: "user",
-						select: "+emailVerified +phoneVerified",
+						select: "+emailVerified +phoneVerified +socketId",
 					});
 
 					if (loginSession) {

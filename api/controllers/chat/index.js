@@ -204,7 +204,7 @@ exports.sendMessage = async (req, res, next) => {
 					},
 				]);
 
-				global.io.to(String(participantExists.socketId)).emit("NEW_CHAT_MESSAGE_RECEIVED", getTheMessage);
+				global.io.to(String(participantExists.socketId)).to(String(user.socketId)).emit("NEW_CHAT_MESSAGE_RECEIVED", getTheMessage);
 
 				res.status(201).json({ message: getTheMessage });
 
