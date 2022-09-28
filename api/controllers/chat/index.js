@@ -235,6 +235,137 @@ exports.sendMessage = async (req, res, next) => {
 	}
 };
 
+exports.getMessages = async (req, res, next) => {
+	const { workspaceId } = req.params;
+	let { skip, limit, participant } = req.query;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		let workspaceIdOk, participantToOk;
+
+		// workspaceId check
+		if (workspaceId) {
+			var isValidWorkspaceId = isValidObjectId(workspaceId);
+			if (isValidWorkspaceId) {
+				var workspaceExists = await Workspace.exists({ _id: workspaceId });
+				if (workspaceExists) {
+					const amIExistsItThisWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": user._id }] });
+					if (amIExistsItThisWorkspace) {
+						workspaceIdOk = true;
+					} else {
+						issue.workspaceId = "You have no access in this workspace!";
+					}
+				} else {
+					issue.workspaceId = "Workspace not found!";
+				}
+			} else {
+				issue.workspaceId = "Invalid workspace Id!";
+			}
+		} else {
+			issue.workspaceId = "Please provide workspace Id!";
+		}
+
+		// participant check
+		if (participant) {
+			if (isValidObjectId(participant)) {
+				var participantExists = await User.findOne({ _id: participant }).select("socketId");
+				if (participantExists) {
+					if (workspaceExists) {
+						const participantExistsInWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": participant }] });
+						if (participantExistsInWorkspace) {
+							participantToOk = true;
+						} else {
+							issue.workspaceId = "Participant has no access in this workspace!";
+						}
+					}
+				} else {
+					issue.participant = "Participant doesn't exists!";
+				}
+			} else {
+				issue.participant = "Invalid mongo Id";
+			}
+		} else {
+			issue.participant = "Please provide user Id where you want to send!";
+		}
+
+		if (participantToOk && workspaceIdOk) {
+			const chatHeader = await ChatHeader.findOne({ $and: [{ workSpaceRef: workspaceId }, { "participants.user": user._id }, { "participants.user": participant }] });
+
+			let messages = [];
+			if (chatHeader) {
+				const getMessages = await Chat.find({
+					$and: [
+						{ chatHeaderRef: chatHeader._id },
+						{
+							$or: [{ $and: [{ sender: user._id }, { to: participant }] }, { $and: [{ sender: participant }, { to: user._id }] }],
+						},
+					],
+				})
+					.populate([
+						{
+							path: "sender",
+							select: "fullName username avatar",
+						},
+						{
+							path: "replayOf",
+							select: "content editedAt createdAt",
+							populate: [
+								{
+									path: "sender",
+									select: "fullName username avatar",
+								},
+								{
+									path: "content.mentionedUsers",
+									select: "fullName username avatar",
+								},
+							],
+						},
+						{
+							path: "content.mentionedUsers",
+							select: "fullName username avatar",
+						},
+						{
+							path: "seen",
+							select: "fullName username avatar",
+						},
+						{
+							path: "reactions.reactor",
+							select: "fullName username avatar",
+						},
+					])
+					.sort({ createdAt: -1 })
+					.skip(skip)
+					.limit(limit);
+
+				messages = getMessages;
+				// Operation for unseen message update as seen
+				Chat.updateMany(
+					{
+						$and: [
+							{
+								$nor: [{ sender: user._id }, { seen: user._id }],
+							},
+							{ chatHeaderRef: chatHeader._id },
+						],
+					},
+					{ $push: { seen: user._id } }
+				).then();
+				// Operation End
+			}
+
+			res.json({ messages });
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
+
 exports.getChatList = async (req, res, next) => {
 	const { workspaceId } = req.params;
 	let { skip, limit } = req.query;
