@@ -81,10 +81,22 @@ exports.getLists = async (req, res, next) => {
 					if (getCards) {
 						getLists = JSON.parse(JSON.stringify(getLists));
 						for (const list of getLists) {
-							const getCards = await Card.find({ listRef: list._id }).select("name progress tags startDate endDate spaceRef listRef").populate({
-								path: "tags",
-								select: "name color",
-							});
+							const getCards = await Card.find({ listRef: list._id })
+								.select("name progress tags startDate endDate spaceRef listRef")
+								.populate([
+									{
+										path: "tags",
+										select: "name color",
+									},
+									{
+										path: "checkList",
+										select: "content checked spaceRef cardRef",
+									},
+									{
+										path: "assignee",
+										select: "fullName username avatar",
+									},
+								]);
 							list.cards = getCards;
 						}
 					}
@@ -322,10 +334,20 @@ exports.getCards = async (req, res, next) => {
 					if (doIHaveAccess) {
 						const getCards = await Card.find({ listRef: listId })
 							.select("name progress tags startDate endDate spaceRef listRef")
-							.populate({
-								path: "tags",
-								select: "name color",
-							})
+							.populate([
+								{
+									path: "tags",
+									select: "name color",
+								},
+								{
+									path: "checkList",
+									select: "content checked spaceRef cardRef",
+								},
+								{
+									path: "assignee",
+									select: "fullName username avatar",
+								},
+							])
 							.skip(skip)
 							.limit(limit);
 
@@ -460,7 +482,7 @@ exports.updateCard = async (req, res, next) => {
 						}
 
 						// check progress number
-						if (progress) {
+						if (progress != undefined) {
 							if (String(parseInt(progress, 10)) != "NaN") {
 								progress = parseInt(progress, 10);
 								if (progress >= 0 && progress <= 100) {
