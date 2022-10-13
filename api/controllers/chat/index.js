@@ -44,7 +44,7 @@ exports.sendMessage = async (req, res, next) => {
 		// sendTo check
 		if (sendTo) {
 			if (isValidObjectId(sendTo)) {
-				var participantExists = await User.findOne({ _id: sendTo }).select("socketId");
+				var participantExists = await User.findOne({ _id: sendTo }).select("fullName username email socketId");
 				if (participantExists) {
 					if (workspaceExists) {
 						const participantExistsInWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": sendTo }] });
@@ -208,8 +208,17 @@ exports.sendMessage = async (req, res, next) => {
 
 				res.status(201).json({ message: getTheMessage });
 
-				// update last message time
-				await ChatHeader.updateOne({ _id: chatHeader._id }, { lastMessageTime: new Date() });
+				// update ChatHeader
+				await ChatHeader.updateOne(
+					{ _id: chatHeader._id },
+					{
+						lastMessageTime: new Date(),
+						searchTags: [
+							{ id: user._id, tags: [user.fullName, user.username, user.email].filter(Boolean) },
+							{ id: participantExists._id, tags: [participantExists.fullName, participantExists.username, participantExists.email].filter(Boolean) },
+						],
+					}
+				);
 
 				// Operation for unseen message update as seen
 				Chat.updateMany(
@@ -368,7 +377,7 @@ exports.getMessages = async (req, res, next) => {
 
 exports.getChatList = async (req, res, next) => {
 	const { workspaceId } = req.params;
-	let { skip, limit } = req.query;
+	let { skip, limit, search } = req.query;
 	try {
 		limit = parseInt(limit) || 20;
 		skip = parseInt(skip) || 0;
@@ -389,7 +398,20 @@ exports.getChatList = async (req, res, next) => {
 					});
 
 					if (doIHaveAccessToGetTag) {
-						const chatHeaders = await ChatHeader.find({ $and: [{ workSpaceRef: workspaceId }, { "participants.user": user._id }] })
+						let searchQuery = {};
+						if (search) {
+							const KeyWordRegExp = new RegExp(".*" + search.replace(/[-\/\\^$*+?()|[\]{}]/g, "") + ".*", "i");
+							searchQuery = {
+								searchTags: {
+									$elemMatch: {
+										id: { $ne: user._id },
+										tags: KeyWordRegExp,
+									},
+								},
+							};
+						}
+
+						const chatHeaders = await ChatHeader.find({ $and: [{ workSpaceRef: workspaceId }, { "participants.user": user._id }, searchQuery] })
 							.populate({
 								path: "participants.user",
 								select: "fullName username avatar",

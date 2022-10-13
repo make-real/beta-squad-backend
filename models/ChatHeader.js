@@ -21,6 +21,16 @@ const chatHeaderSchema = new Schema(
 		lastMessageTime: {
 			type: Date,
 		},
+		searchTags: {
+			type: [
+				{
+					_id: false,
+					id: String,
+					tags: [],
+				},
+			],
+			select: false,
+		},
 	},
 	{
 		timestamps: true,
