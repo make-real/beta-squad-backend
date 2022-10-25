@@ -414,7 +414,7 @@ exports.getChatList = async (req, res, next) => {
 						const chatHeaders = await ChatHeader.find({ $and: [{ workSpaceRef: workspaceId }, { "participants.user": user._id }, searchQuery] })
 							.populate({
 								path: "participants.user",
-								select: "fullName username avatar",
+								select: "fullName username avatar lastOnline",
 							})
 							.sort({ lastMessageTime: -1 })
 							.skip(skip)
