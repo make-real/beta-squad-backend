@@ -51,6 +51,7 @@ const socketServer = async () => {
 			socket.leave(ids);
 
 			user.socketId = null;
+			user.lastOnline = new Date();
 			await user.save();
 		});
 	});

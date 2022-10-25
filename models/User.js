@@ -41,6 +41,10 @@ const userSchema = new Schema(
 			type: String,
 			select: false,
 		},
+		lastOnline: {
+			type: Date,
+			default: new Date(),
+		},
 	},
 	{
 		timestamps: true,

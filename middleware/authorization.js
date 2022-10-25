@@ -1,5 +1,6 @@
 const { isValidObjectId } = require("mongoose");
 const UserSession = require("../models/UserSession");
+const User = require("../models/User");
 const { parseJWT } = require("../utils/jwt");
 
 exports.userAuthorization = async (req, res, next) => {
@@ -25,7 +26,14 @@ exports.userAuthorization = async (req, res, next) => {
 							if (user) {
 								if (user.emailVerified) {
 									req.user = user;
-									return next();
+									next();
+
+									const dt = new Date();
+									dt.setMinutes(dt.getMinutes() - 1);
+									if (user.lastOnline < dt) {
+										await User.updateOne({ _id: user._id }, { lastOnline: new Date() });
+									}
+									return;
 								} else {
 									issue.message = "Please verify your email address!";
 								}
