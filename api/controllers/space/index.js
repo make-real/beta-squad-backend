@@ -168,6 +168,66 @@ exports.getSpaces = async (req, res, next) => {
 };
 
 /**
+ * Get spaces details under a workspace
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.getSpaceDetails = async (req, res, next) => {
+	let { spaceId } = req.params;
+	let { skip, limit } = req.query;
+
+	try {
+		limit = parseInt(limit) || 20;
+		skip = parseInt(skip) || 0;
+		const user = req.user;
+		const issue = {};
+
+		if (spaceId) {
+			if (isValidObjectId(spaceId)) {
+				const spaceExists = await Space.exists({ _id: spaceId });
+				if (spaceExists) {
+					const amIMemberOfThisSpace = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
+					if (amIMemberOfThisSpace) {
+						let getSpace = await Space.findOne(
+							{ _id: spaceId },
+							{
+								members: { $slice: [skip, limit] },
+							}
+						).select("+members");
+
+						getSpace = JSON.parse(JSON.stringify(getSpace));
+
+						const spaceMembers = getSpace.members;
+						const members = [];
+						for (const single of spaceMembers) {
+							members.push(single.member);
+						}
+						delete getSpace.members;
+						getSpace.activeMembers = await User.countDocuments({ $and: [{ _id: { $in: members } }, { socketId: { $ne: null } }] });
+
+						return res.json({ space: getSpace });
+					} else {
+						issue.message = "You're not a member of this space!";
+					}
+				} else {
+					issue.message = "Space not found";
+				}
+			} else {
+				issue.message = "Invalid space id!";
+			}
+		} else {
+			issue.message = "Please provide space id!";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
  * Update space
  *
  * @param {express.Request} req Express request object
