@@ -2,11 +2,12 @@ const { isValidObjectId } = require("mongoose");
 const { phone: phoneNumberValidator } = require("phone");
 const { v4: uuid } = require("uuid");
 const bcrypt = require("bcrypt");
+const { verifyGoogleToken } = require("../../utils/firebase/auth");
 
 const User = require("../../models/User");
 const UserSession = require("../../models/UserSession");
 
-const { isValidEmail, sendOtpVia, verifyOtp, usernameGenerating } = require("../../utils/func");
+const { isValidEmail, sendOtpVia, verifyOtp, usernameGenerating, generatePassword } = require("../../utils/func");
 const { createToken, parseJWT } = require("../../utils/jwt");
 
 /**
@@ -17,11 +18,11 @@ const { createToken, parseJWT } = require("../../utils/jwt");
  * @param {() => } next Express callback
  */
 exports.login = async (req, res, next) => {
-	let { email, password } = req.body;
+	let { email, password, googleAuthToken } = req.body;
 	try {
-		const issue = {};
+		let issue = {};
 
-		let emailOk, passwordOk, isUserExists;
+		let emailOk, passwordOk, googleAuthTOkenOk, isUserExists;
 		if (email) {
 			email = String(email).replace(/  +/g, "").trim();
 			isUserExists = await User.findOne({ email }).select("+password +emailVerified +phoneVerified");
@@ -49,7 +50,40 @@ exports.login = async (req, res, next) => {
 			issue.password = "Please enter your password!";
 		}
 
-		if (emailOk && passwordOk) {
+		let decodeData;
+		if (googleAuthToken) {
+			decodeData = await verifyGoogleToken(googleAuthToken);
+			if (!decodeData.error) {
+				googleAuthTOkenOk = true;
+			} else {
+				issue = { googleAuthToken: decodeData.error };
+			}
+		}
+
+		if ((emailOk && passwordOk) || googleAuthTOkenOk) {
+			if (googleAuthTOkenOk) {
+				const userExists = await User.findOne({ email: decodeData.email }).select("+emailVerified +phoneVerified");
+				if (userExists) {
+					isUserExists = userExists;
+				} else {
+					let password = generatePassword(8);
+					const salt = bcrypt.genSaltSync(11);
+					password = bcrypt.hashSync(password, salt);
+
+					const userStructure = new User({
+						fullName: decodeData.fullName,
+						username: await usernameGenerating(decodeData.email),
+						email: decodeData.email,
+						phone: decodeData.phone,
+						password,
+						avatar: decodeData.picture,
+						emailVerified: true,
+					});
+					const saveUser = await userStructure.save();
+					isUserExists = saveUser;
+				}
+			}
+
 			const sessionUUID = uuid();
 			const expireDate = new Date();
 			expireDate.setDate(expireDate.getDate() + 30);
@@ -63,7 +97,17 @@ exports.login = async (req, res, next) => {
 			const session = await sessionStructure.save();
 
 			const jwtToken = createToken(session._id, sessionUUID);
-			return res.json({ jwtToken, loggedUser: isUserExists });
+			const loggedUser = {
+				_id: isUserExists._id,
+				fullName: isUserExists.fullName,
+				username: isUserExists.username,
+				email: isUserExists.email,
+				emailVerified: isUserExists.emailVerified,
+				phoneVerified: isUserExists.phoneVerified,
+				avatar: isUserExists.avatar,
+				lastOnline: isUserExists.lastOnline,
+			};
+			return res.json({ jwtToken, loggedUser });
 		}
 
 		return res.status(400).json({ issue });

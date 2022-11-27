@@ -107,4 +107,14 @@ function splitSpecificParts(str, startChar, endChar) {
 	return targetParts;
 }
 
-module.exports = { sendOtpVia, verifyOtp, isValidEmail, usernameGenerating, splitSpecificParts };
+function generatePassword(length) {
+	length = length || 10;
+	let charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$_&-+()/*:;!?";
+	let retVal = "";
+	for (var i = 0, n = charset.length; i < length; ++i) {
+		retVal += charset.charAt(Math.floor(Math.random() * n));
+	}
+	return retVal;
+}
+
+module.exports = { sendOtpVia, verifyOtp, isValidEmail, usernameGenerating, splitSpecificParts, generatePassword };
