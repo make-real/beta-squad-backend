@@ -946,6 +946,50 @@ exports.settingsUpdate = async (req, res, next) => {
 	}
 };
 
+exports.getSettings = async (req, res, next) => {
+	let { workspaceId } = req.params;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		if (workspaceId) {
+			if (isValidObjectId(workspaceId)) {
+				const workspaceExists = await Workspace.exists({ _id: workspaceId });
+				if (workspaceExists) {
+					const amIExistsInWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": user._id }] });
+					if (amIExistsInWorkspace) {
+						let workspaceSettings = await WorkspaceSetting.findOne({ $and: [{ workSpace: workspaceId }, { user: user._id }] });
+
+						if (!workspaceSettings) {
+							// Workspace Setting create for this user
+							const workspaceSettingStructure = new WorkspaceSetting({
+								workSpace: workspaceId,
+								user: user._id,
+							});
+							workspaceSettings = await workspaceSettingStructure.save();
+						}
+
+						return res.json({ workspaceSettings });
+					} else {
+						issue.message = "You are not member of the workspace!";
+					}
+				} else {
+					issue.message = "Workspace not found";
+				}
+			} else {
+				issue.message = "Invalid workspace id!";
+			}
+		} else {
+			issue.message = "Please provide workspace id!";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
 /**
  * TAGS CRUD ===============================================
  * =========================================================
