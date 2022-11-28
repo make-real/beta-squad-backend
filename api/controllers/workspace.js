@@ -4,6 +4,7 @@ const { isValidEmail } = require("../../utils/func");
 const { defaultTags } = require("../../config/centralVariables");
 const User = require("../../models/User");
 const Workspace = require("../../models/Workspace");
+const WorkspaceSetting = require("../../models/WorkspaceSetting");
 const Space = require("../../models/Space");
 const Card = require("../../models/Card");
 const Tag = require("../../models/Tag");
@@ -11,6 +12,7 @@ const List = require("../../models/List");
 const SpaceChat = require("../../models/SpaceChat");
 const Checklist = require("../../models/Checklist");
 const CommentChat = require("../../models/CommentChat");
+const Notification = require("../../models/Notification");
 
 /**
  * Create a workspace
@@ -67,6 +69,14 @@ exports.createWorkspace = async (req, res, next) => {
 			});
 
 			const saveWorkspace = await workspaceStructure.save();
+
+			// Workspace Setting create for this user
+			const workspaceSettingStructure = new WorkspaceSetting({
+				workSpace: saveWorkspace._id,
+				user: user._id,
+			});
+			await workspaceSettingStructure.save();
+
 			const workspace = {
 				_id: saveWorkspace._id,
 				name: saveWorkspace.name,
@@ -347,6 +357,8 @@ exports.deleteWorkspace = async (req, res, next) => {
 						if (deleteSpace.deletedCount) {
 							res.json({ message: "Successfully deleted the workspace" });
 
+							await WorkspaceSetting.deleteMany({ workSpace: workspaceId });
+
 							const findSpaces = await Space.find({ workSpaceRef: workspaceId }).select("_id");
 							for (const space of findSpaces) {
 								await List.deleteMany({ spaceRef: space._id });
@@ -398,7 +410,7 @@ exports.addTeamMembers = async (req, res, next) => {
 
 		if (workspaceId) {
 			if (isValidObjectId(workspaceId)) {
-				const workspaceExists = await Workspace.exists({ _id: workspaceId });
+				const workspaceExists = await Workspace.findOne({ _id: workspaceId }).select("name");
 				if (workspaceExists) {
 					const doIHaveAccessToUpdate = await Workspace.exists({
 						$and: [
@@ -433,7 +445,21 @@ exports.addTeamMembers = async (req, res, next) => {
 										}
 									);
 
+									// Workspace Setting create for this user
+									const workspaceSettingStructure = new WorkspaceSetting({
+										workSpace: workspaceId,
+										user: userExists._id,
+									});
+									await workspaceSettingStructure.save();
+
 									if (pushTeamMembersInWorkspace.modifiedCount) {
+										// notification creating for user about adding in workspace
+										const notificationStructure = new Notification({
+											user: userExists._id,
+											message: `${user.fullName} added you in workspace ${workspaceExists.name}`,
+										});
+										await notificationStructure.save();
+
 										// also add the member to the Default(Onboarding) space of the Workspace
 										const findDefaultSpace = await await Space.findOne({ $and: [{ workSpaceRef: workspaceId }, { initialSpace: "yes" }] }).select("_id");
 										if (findDefaultSpace) {
@@ -637,6 +663,8 @@ exports.roleChangeAndRemoveTeamMembers = async (req, res, next) => {
 													}
 												);
 
+												await WorkspaceSetting.deleteOne({ $and: [{ workSpace: workspaceId }, { user: memberId }] });
+
 												// also remove the member from the spaces of the Workspace
 												await Space.updateOne(
 													{ $and: [{ workSpaceRef: workspaceId }, { "members.member": memberId }] },
@@ -812,6 +840,8 @@ exports.leaveFromWorkspace = async (req, res, next) => {
 							}
 						);
 
+						await WorkspaceSetting.deleteOne({ $and: [{ workSpace: workspaceId }, { user: user._id }] });
+
 						// Also leave from the spaces of the Workspace
 						await Space.updateOne(
 							{ $and: [{ workSpaceRef: workspaceId }, { "members.member": user._id }] },
@@ -827,6 +857,78 @@ exports.leaveFromWorkspace = async (req, res, next) => {
 						return res.json({ message: "Successfully left from the workplace" });
 					} else {
 						issue.message = "You already leave from the workspace!";
+					}
+				} else {
+					issue.message = "Workspace not found";
+				}
+			} else {
+				issue.message = "Invalid workspace id!";
+			}
+		} else {
+			issue.message = "Please provide workspace id!";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
+ * User's own settings update in workspace
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.settingsUpdate = async (req, res, next) => {
+	let { workspaceId } = req.params;
+	let { popUpNotification, emailNotification, soundNotification, pushNotification } = req.body;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		if (workspaceId) {
+			if (isValidObjectId(workspaceId)) {
+				const workspaceExists = await Workspace.exists({ _id: workspaceId });
+				if (workspaceExists) {
+					const amIExistsInWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": user._id }] });
+					if (amIExistsInWorkspace) {
+						const findWorkspaceSetting = await WorkspaceSetting.findOne({ $and: [{ workSpace: workspaceId }, { user: user._id }] });
+
+						let updatedSettings;
+						if (findWorkspaceSetting) {
+							let notificationDeliverySettings = findWorkspaceSetting.notificationDeliverySettings;
+
+							const notificationSettings = {
+								...notificationDeliverySettings,
+								popUpNotification: popUpNotification === true || popUpNotification === false ? popUpNotification : notificationDeliverySettings.popUpNotification,
+								emailNotification: emailNotification === true || emailNotification === false ? emailNotification : notificationDeliverySettings.emailNotification,
+								soundNotification: soundNotification === true || soundNotification === false ? soundNotification : notificationDeliverySettings.soundNotification,
+								pushNotification: pushNotification === true || pushNotification === false ? pushNotification : notificationDeliverySettings.pushNotification,
+							};
+							await WorkspaceSetting.updateOne({ _id: findWorkspaceSetting._id }, { notificationDeliverySettings: notificationSettings });
+
+							updatedSettings = {
+								notificationDeliverySettings: notificationSettings,
+							};
+						} else {
+							// Workspace Setting create for this user
+							const workspaceSettingStructure = new WorkspaceSetting({
+								workSpace: workspaceId,
+								user: user._id,
+							});
+							const create = await workspaceSettingStructure.save();
+
+							updatedSettings = {
+								notificationDeliverySettings: create.notificationDeliverySettings,
+							};
+						}
+
+						return res.json({ message: "Successfully updated", updatedSettings });
+					} else {
+						issue.message = "You are not member of the workspace!";
 					}
 				} else {
 					issue.message = "Workspace not found";
