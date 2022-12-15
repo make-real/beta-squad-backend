@@ -195,7 +195,7 @@ exports.sendMessage = async (req, res, next) => {
 						select: "fullName username avatar",
 					},
 					{
-						path: "seen",
+						path: "seenBy",
 						select: "fullName username avatar",
 					},
 					{
@@ -225,12 +225,12 @@ exports.sendMessage = async (req, res, next) => {
 					{
 						$and: [
 							{
-								$nor: [{ sender: user._id }, { seen: user._id }],
+								$nor: [{ sender: user._id }, { seenBy: user._id }],
 							},
 							{ chatHeaderRef: chatHeader._id },
 						],
 					},
-					{ $push: { seen: user._id } }
+					{ $push: { seenBy: user._id } }
 				).then();
 				// Operation End
 			}
@@ -336,7 +336,7 @@ exports.getMessages = async (req, res, next) => {
 							select: "fullName username avatar",
 						},
 						{
-							path: "seen",
+							path: "seenBy",
 							select: "fullName username avatar",
 						},
 						{
@@ -354,12 +354,12 @@ exports.getMessages = async (req, res, next) => {
 					{
 						$and: [
 							{
-								$nor: [{ sender: user._id }, { seen: user._id }],
+								$nor: [{ sender: user._id }, { seenBy: user._id }],
 							},
 							{ chatHeaderRef: chatHeader._id },
 						],
 					},
-					{ $push: { seen: user._id } }
+					{ $push: { seenBy: user._id } }
 				).then();
 				// Operation End
 			}

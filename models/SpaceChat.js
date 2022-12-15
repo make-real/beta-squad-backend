@@ -33,7 +33,7 @@ const spaceChatSchema = new Schema(
 				],
 			},
 		},
-		seen: {
+		seenBy: {
 			type: [
 				{
 					type: Schema.Types.ObjectId,

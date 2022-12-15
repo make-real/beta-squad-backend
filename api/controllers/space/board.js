@@ -1322,7 +1322,7 @@ exports.createComment = async (req, res, next) => {
 						select: "fullName username avatar",
 					},
 					{
-						path: "seen",
+						path: "seenBy",
 						select: "fullName username avatar",
 					},
 					{
@@ -1339,11 +1339,11 @@ exports.createComment = async (req, res, next) => {
 						$and: [
 							{ to: cardId },
 							{
-								$nor: [{ sender: user._id }, { seen: user._id }],
+								$nor: [{ sender: user._id }, { seenBy: user._id }],
 							},
 						],
 					},
-					{ $push: { seen: user._id } }
+					{ $push: { seenBy: user._id } }
 				).then();
 				// Operation End
 			}
@@ -1404,7 +1404,7 @@ exports.getComments = async (req, res, next) => {
 									select: "fullName username avatar",
 								},
 								{
-									path: "seen",
+									path: "seenBy",
 									select: "fullName username avatar",
 								},
 								{
@@ -1423,11 +1423,11 @@ exports.getComments = async (req, res, next) => {
 								$and: [
 									{ to: cardId },
 									{
-										$nor: [{ sender: user._id }, { seen: user._id }],
+										$nor: [{ sender: user._id }, { seenBy: user._id }],
 									},
 								],
 							},
-							{ $push: { seen: user._id } }
+							{ $push: { seenBy: user._id } }
 						).then();
 						// Operation End
 					} else {
@@ -1533,7 +1533,7 @@ exports.commentsEdit = async (req, res, next) => {
 										select: "fullName username avatar",
 									},
 									{
-										path: "seen",
+										path: "seenBy",
 										select: "fullName username avatar",
 									},
 									{

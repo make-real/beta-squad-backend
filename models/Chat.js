@@ -38,7 +38,7 @@ const chatSchema = new Schema(
 				],
 			},
 		},
-		seen: {
+		seenBy: {
 			type: [
 				{
 					type: Schema.Types.ObjectId,
