@@ -26,7 +26,7 @@ exports.createWorkspace = async (req, res, next) => {
 	try {
 		const user = req.user;
 		const issue = {};
-		let nameOk;
+		let nameOk, logoOk;
 
 		// name check
 		if (name) {
@@ -57,9 +57,30 @@ exports.createWorkspace = async (req, res, next) => {
 		}
 
 		if (nameOk) {
+			if (req.files && req.files?.logo) {
+				const theLogo = req.files.logo;
+				const checkImage = imageCheck(theLogo);
+				if (checkImage.status) {
+					var uploadResult = await upload(theLogo.path);
+					if (uploadResult.secure_url) {
+						logoOk = true;
+						var logoUrl = uploadResult.secure_url;
+					} else {
+						issue.logo = uploadResult.message;
+					}
+				} else {
+					issue.logo = checkImage.message;
+				}
+			} else {
+				logoOk = true;
+			}
+		}
+
+		if (nameOk && logoOk) {
 			const workspaceStructure = new Workspace({
 				name,
 				owner: user._id,
+				logo: logoUrl,
 				teamMembers: [
 					{
 						member: user._id,
@@ -80,6 +101,7 @@ exports.createWorkspace = async (req, res, next) => {
 			const workspace = {
 				_id: saveWorkspace._id,
 				name: saveWorkspace.name,
+				logo: saveWorkspace.logo,
 			};
 
 			if (saveWorkspace) {

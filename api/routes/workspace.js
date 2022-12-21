@@ -3,7 +3,7 @@ const multipart = require("connect-multiparty");
 
 const { createWorkspace, getWorkspaces, getSingleWorkspace, updateWorkspace, deleteWorkspace, addTeamMembers, teamMembers, roleChangeAndRemoveTeamMembers, ownerShipTransferOfWorkspace, leaveFromWorkspace, settingsUpdate, getSettings, createTags, getTags, editTags, deleteTags } = require("../controllers/workspace");
 
-workspaceRouter.post("/", createWorkspace);
+workspaceRouter.post("/", multipart(), createWorkspace);
 workspaceRouter.get("/", getWorkspaces);
 workspaceRouter.get("/:workspaceId", getSingleWorkspace);
 workspaceRouter.patch("/:workspaceId", multipart(), updateWorkspace);
