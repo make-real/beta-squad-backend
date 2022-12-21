@@ -117,4 +117,24 @@ function generatePassword(length) {
 	return retVal;
 }
 
-module.exports = { sendOtpVia, verifyOtp, isValidEmail, usernameGenerating, splitSpecificParts, generatePassword };
+function hexAColorGen() {
+	function opacity() {
+		let min = 3;
+		let max = 15;
+		let charset = "0123456789abcdef";
+		let retVal = "";
+		for (let i = 0; i < 2; i++) {
+			const randomNum = Math.floor(Math.random() * (max - min + 1) + min);
+			retVal += charset.charAt(randomNum);
+		}
+		return retVal;
+	}
+
+	const hexAColor = "000000".replace(/0/g, function () {
+		return (~~(Math.random() * 16)).toString(16);
+	});
+	const color = `#${hexAColor}${opacity()}`;
+	return color;
+}
+
+module.exports = { sendOtpVia, verifyOtp, isValidEmail, usernameGenerating, splitSpecificParts, generatePassword, hexAColorGen };

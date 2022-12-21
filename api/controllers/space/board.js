@@ -7,7 +7,7 @@ const Checklist = require("../../../models/Checklist");
 const CommentChat = require("../../../models/CommentChat");
 const Tag = require("../../../models/Tag");
 const { multipleFilesCheckAndUpload } = require("../../../utils/file");
-const { splitSpecificParts } = require("../../../utils/func");
+const { splitSpecificParts, hexAColorGen } = require("../../../utils/func");
 
 exports.createList = async (req, res, next) => {
 	let { spaceId } = req.params;
@@ -82,7 +82,7 @@ exports.getLists = async (req, res, next) => {
 						getLists = JSON.parse(JSON.stringify(getLists));
 						for (const list of getLists) {
 							const getCards = await Card.find({ listRef: list._id })
-								.select("name progress tags startDate endDate spaceRef listRef")
+								.select("name progress tags startDate endDate spaceRef listRef color")
 								.populate([
 									{
 										path: "tags",
@@ -273,6 +273,7 @@ exports.createCard = async (req, res, next) => {
 									spaceRef: existsList.spaceRef,
 									listRef: listId,
 									creator: user._id,
+									color: hexAColorGen(),
 								});
 								const createCard = await cardStructure.save();
 
@@ -333,7 +334,7 @@ exports.getCards = async (req, res, next) => {
 					const doIHaveAccess = await Space.exists({ $and: [{ _id: existsList.spaceRef }, { "members.member": user._id }] });
 					if (doIHaveAccess) {
 						const getCards = await Card.find({ listRef: listId })
-							.select("name progress tags startDate endDate spaceRef listRef")
+							.select("name progress tags startDate endDate spaceRef listRef color")
 							.populate([
 								{
 									path: "tags",
