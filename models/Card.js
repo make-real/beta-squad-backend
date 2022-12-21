@@ -29,6 +29,10 @@ const cardSchema = new Schema(
 		],
 		startDate: Date,
 		endDate: Date,
+		order: {
+			type: Number,
+			required: true,
+		},
 		color: {
 			type: String,
 			required: true,

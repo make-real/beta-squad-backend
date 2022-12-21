@@ -81,8 +81,9 @@ exports.getLists = async (req, res, next) => {
 					if (getCards) {
 						getLists = JSON.parse(JSON.stringify(getLists));
 						for (const list of getLists) {
-							const getCards = await Card.find({ listRef: list._id })
-								.select("name progress tags startDate endDate spaceRef listRef color")
+							list.cards = await Card.find({ listRef: list._id })
+								.sort({ order: 1 })
+								.select("name progress tags startDate endDate order spaceRef listRef color")
 								.populate([
 									{
 										path: "tags",
@@ -97,7 +98,6 @@ exports.getLists = async (req, res, next) => {
 										select: "fullName username avatar",
 									},
 								]);
-							list.cards = getCards;
 						}
 					}
 
@@ -268,11 +268,22 @@ exports.createCard = async (req, res, next) => {
 						if (doIHaveAccess) {
 							const isDuplicate = await Card.exists({ $and: [{ listRef: listId }, { name: new RegExp(`^${name}$`, "i") }] });
 							if (!isDuplicate) {
+								// generate order number
+								let orderNumber;
+								const existsCard = await Card.exists({ $and: [{ listRef: listId }, { order: 1 }] });
+								if (existsCard) {
+									const highest = await Card.findOne({ listRef: listId }).sort({ order: -1 }).select("order");
+									orderNumber = highest.order + 1;
+								} else {
+									orderNumber = 1;
+								}
+
 								const cardStructure = new Card({
 									name,
 									spaceRef: existsList.spaceRef,
 									listRef: listId,
 									creator: user._id,
+									order: orderNumber,
 									color: hexAColorGen(),
 								});
 								const createCard = await cardStructure.save();
@@ -334,7 +345,8 @@ exports.getCards = async (req, res, next) => {
 					const doIHaveAccess = await Space.exists({ $and: [{ _id: existsList.spaceRef }, { "members.member": user._id }] });
 					if (doIHaveAccess) {
 						const getCards = await Card.find({ listRef: listId })
-							.select("name progress tags startDate endDate spaceRef listRef color")
+							.sort({ order: 1 })
+							.select("name progress tags startDate endDate order spaceRef listRef color")
 							.populate([
 								{
 									path: "tags",
@@ -723,7 +735,7 @@ exports.updateCard = async (req, res, next) => {
 
 exports.moveCard = async (req, res, next) => {
 	let { spaceId, listId, cardId } = req.params;
-	let { newListId } = req.body;
+	let { newListId, order } = req.body;
 
 	try {
 		const user = req.user;
@@ -733,7 +745,7 @@ exports.moveCard = async (req, res, next) => {
 		const isValidListId = isValidObjectId(listId);
 		const isValidCardId = isValidObjectId(cardId);
 		if (isValidSpaceId && isValidListId && isValidCardId) {
-			const cardExists = await Card.findOne({ _id: cardId }).select("startDate spaceRef");
+			const cardExists = await Card.findOne({ _id: cardId }).select("startDate spaceRef listRef order");
 			if (cardExists) {
 				const existsSpace = await Space.findOne({ _id: cardExists.spaceRef }).select("workSpaceRef");
 				if (existsSpace) {
@@ -746,14 +758,83 @@ exports.moveCard = async (req, res, next) => {
 								if (existsMoveToList) {
 									const isValidToMoveToNewList = await List.exists({ $and: [{ _id: newListId }, { spaceRef: cardExists.spaceRef }] });
 									if (isValidToMoveToNewList) {
-										await Card.updateOne(
-											{ _id: cardId },
-											{
-												listRef: newListId,
+										// order num check
+										let orderOk;
+										if (!(order === undefined || order === "")) {
+											order = parseInt(order);
+											if (order) {
+												if (order > 0) {
+													orderOk = true;
+												} else {
+													issue.order = "Order number number should be greater than 0!";
+												}
+											} else {
+												issue.order = "Invalid order number!";
 											}
-										);
-										const card = await Card.findOne({ _id: cardId }).select("name listRef spaceRef");
-										return res.json({ card });
+										} else {
+											order = undefined;
+											orderOk = true;
+										}
+
+										if (orderOk) {
+											let orderNumber = order;
+											if (!order) {
+												// generate order number
+												const existsCard = await Card.exists({ $and: [{ listRef: newListId }, { order: 1 }] });
+												if (existsCard) {
+													const highest = await Card.findOne({ listRef: newListId }).sort({ order: -1 }).select("order");
+													orderNumber = highest.order + 1;
+												} else {
+													orderNumber = 1;
+												}
+											}
+
+											await Card.updateOne(
+												{ _id: cardId },
+												{
+													listRef: newListId,
+													order: orderNumber,
+												}
+											);
+
+											const card = await Card.findOne({ _id: cardId }).select("name listRef order spaceRef");
+											res.json({ card });
+
+											/****  START: cards order number rearrange ****/
+											// Rearrange the card order number of the previous list
+											let odrNum = cardExists.order;
+											const cards = await Card.find({ $and: [{ order: { $gte: odrNum } }, { listRef: cardExists.listRef }] })
+												.sort({ order: 1 })
+												.select("_id");
+											for (const card of cards) {
+												await Card.updateOne(
+													{ _id: card._id },
+													{
+														order: odrNum,
+													}
+												);
+												odrNum = odrNum + 1;
+											}
+											/****  END: cards order number rearrange ****/
+
+											if (order) {
+												/****  START: cards order number rearrange ****/
+												// Rearrange the card order number of the new list
+												const cards = await Card.find({ $and: [{ order: { $gte: order } }, { _id: { $ne: cardId } }, { listRef: newListId }] })
+													.sort({ order: 1 })
+													.select("_id");
+												for (const card of cards) {
+													order = order + 1;
+													await Card.updateOne(
+														{ _id: card._id },
+														{
+															order: order,
+														}
+													);
+												}
+												/****  END: cards order number rearrange ****/
+											}
+										}
 									} else {
 										issue.message = "Unable to perform the operation!";
 									}
@@ -819,13 +900,24 @@ exports.copyCard = async (req, res, next) => {
 				if (existsSpace) {
 					const doIHaveAccess = await Space.exists({ $and: [{ _id: cardExists.spaceRef }, { "members.member": user._id }] });
 					if (doIHaveAccess) {
+						// generate order number
+						let orderNumber;
+						const existsCard = await Card.exists({ $and: [{ listRef: cardExists.listRef }, { order: 1 }] });
+						if (existsCard) {
+							const highest = await Card.findOne({ listRef: cardExists.listRef }).sort({ order: -1 }).select("order");
+							orderNumber = highest.order + 1;
+						} else {
+							orderNumber = 1;
+						}
+
 						cardExists = JSON.parse(JSON.stringify(cardExists));
 						cardExists._id = undefined;
 						cardExists.name = name ? name : `Copy of ${cardExists.name}`;
 
 						const newCardOfCopy = new Card({
-							creator: user._id,
 							...cardExists,
+							creator: user._id,
+							order: orderNumber,
 						});
 						const copiedCard = await newCardOfCopy.save();
 
@@ -868,7 +960,7 @@ exports.deleteCard = async (req, res, next) => {
 		const isValidListId = isValidObjectId(listId);
 		const isValidCardId = isValidObjectId(cardId);
 		if (isValidSpaceId && isValidListId && isValidCardId) {
-			const cardExists = await Card.findOne({ _id: cardId }).select("startDate spaceRef");
+			const cardExists = await Card.findOne({ _id: cardId }).select("startDate spaceRef listRef order");
 			if (cardExists) {
 				const existsSpace = await Space.findOne({ _id: cardExists.spaceRef }).select("workSpaceRef");
 				if (existsSpace) {
@@ -877,6 +969,23 @@ exports.deleteCard = async (req, res, next) => {
 						const deleteCard = await Card.deleteOne({ _id: cardId });
 						if (deleteCard.deletedCount) {
 							res.json({ message: "Successfully deleted card!" });
+
+							/****  START: cards order number rearrange ****/
+							const cards = await Card.find({ $and: [{ order: { $gte: cardExists.order } }, { listRef: cardExists.listRef }] })
+								.sort({ order: 1 })
+								.select("_id");
+							let order = cardExists.order;
+							for (const card of cards) {
+								await Card.updateOne(
+									{ _id: card._id },
+									{
+										order,
+									}
+								);
+								order = order + 1;
+							}
+							/****  END: cards order number rearrange ****/
+
 							await Checklist.deleteMany({ cardRef: cardId });
 							await CommentChat.deleteMany({ to: cardId });
 						} else {
@@ -898,6 +1007,147 @@ exports.deleteCard = async (req, res, next) => {
 				issue.message = "Invalid list id!";
 			} else if (!isValidCardId) {
 				issue.message = "Invalid card id!";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
+
+exports.orderOrSortCard = async (req, res, next) => {
+	let { spaceId, listId, cardId } = req.params;
+	let { order } = req.body;
+
+	try {
+		let orderOk;
+		const user = req.user;
+		const issue = {};
+
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		const isValidCardId = isValidObjectId(cardId);
+		if (isValidSpaceId && isValidListId && isValidCardId) {
+			const cardExists = await Card.findOne({ _id: cardId }).select("spaceRef listRef order");
+			if (cardExists) {
+				const existsSpace = await Space.findOne({ _id: cardExists.spaceRef }).select("workSpaceRef");
+				if (existsSpace) {
+					const doIHaveAccess = await Space.exists({ $and: [{ _id: cardExists.spaceRef }, { "members.member": user._id }] });
+					if (doIHaveAccess) {
+						// order check
+						if (order) {
+							order = parseInt(order);
+							if (order) {
+								if (order > 0) {
+									orderOk = true;
+								} else {
+									issue.order = "Order number number should be greater than 0!";
+								}
+							} else {
+								issue.order = "Invalid order number!";
+							}
+						} else {
+							issue.order = "Please provide order/sorting number!";
+						}
+
+						if (orderOk) {
+							if (cardExists.order < order) {
+								/****  START: previous cards order number rearrange ****/
+								const cards = await Card.find({ $and: [{ order: { $lte: order } }, { _id: { $ne: cardId } }, { listRef: cardExists.listRef }] })
+									.sort({ order: 1 })
+									.select("_id");
+
+								let orderNum = 1;
+								for (const card of cards) {
+									await Card.updateOne(
+										{ _id: card._id },
+										{
+											order: orderNum,
+										}
+									);
+									orderNum = orderNum + 1;
+								}
+								/****  END: previous cards order number rearrange ****/
+							}
+
+							// Update cards order
+							await Card.updateOne(
+								{ _id: cardId },
+								{
+									order,
+								}
+							);
+
+							const card = await Card.findOne({ _id: cardId })
+								.select("-createdAt -updatedAt -creator")
+								.populate([
+									{
+										path: "tags",
+										select: "name color",
+									},
+									{
+										path: "checkList",
+										select: "content checked spaceRef cardRef assignee",
+									},
+									{
+										path: "assignee",
+										select: "fullName username avatar",
+									},
+								]);
+
+							res.json({ updatedCard: card });
+
+							if (cardExists.order > order) {
+								/****  START: next cards order number rearrange ****/
+								const cards = await Card.find({ $and: [{ order: { $gte: order } }, { _id: { $ne: cardId } }, { listRef: cardExists.listRef }] })
+									.sort({ order: 1 })
+									.select("_id");
+								let orderNum = order;
+								for (const card of cards) {
+									orderNum = orderNum + 1;
+									await Card.updateOne(
+										{ _id: card._id },
+										{
+											order: orderNum,
+										}
+									);
+								}
+								/****  END: next cards order number rearrange ****/
+							}
+
+							/****  START: All cards order number rearrange ****/
+							const allCards = await Card.find({ listRef: cardExists.listRef }).sort({ order: 1 }).select("_id");
+							let orderNum = 1;
+							for (const card of allCards) {
+								await Card.updateOne(
+									{ _id: card._id },
+									{
+										order: orderNum,
+									}
+								);
+								orderNum = orderNum + 1;
+							}
+							/****  END: All cards order number rearrange ****/
+						}
+					} else {
+						issue.spaceId = "You have no access to this space!";
+					}
+				} else {
+					issue.spaceId = "Not found space!";
+				}
+			} else {
+				issue.cardId = "Not found card!";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.spaceId = "Invalid space id!";
+			} else if (!isValidListId) {
+				issue.listId = "Invalid list id!";
+			} else if (!isValidCardId) {
+				issue.cardId = "Invalid card id!";
 			}
 		}
 

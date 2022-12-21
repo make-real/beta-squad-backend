@@ -1,7 +1,7 @@
 const multipart = require("connect-multiparty");
 const boardRouter = require("express").Router({ mergeParams: true });
 
-const { createList, getLists, editList, deleteList, createCard, getCards, getSingleCard, updateCard, moveCard, copyCard, deleteCard, createChecklistItem, updateChecklistItem, deleteChecklistItem, createComment, getComments, commentsEdit, commentsDelete, commentsReaction } = require("../../controllers/space/board");
+const { createList, getLists, editList, deleteList, createCard, getCards, getSingleCard, updateCard, moveCard, copyCard, deleteCard, orderOrSortCard, createChecklistItem, updateChecklistItem, deleteChecklistItem, createComment, getComments, commentsEdit, commentsDelete, commentsReaction } = require("../../controllers/space/board");
 
 boardRouter.post("/", createList);
 boardRouter.get("/", getLists);
@@ -16,6 +16,7 @@ boardRouter.patch("/:listId/card/:cardId", multipart(), updateCard);
 boardRouter.put("/:listId/card/:cardId/move", moveCard);
 boardRouter.copy("/:listId/card/:cardId/copy", copyCard);
 boardRouter.delete("/:listId/card/:cardId/delete", deleteCard);
+boardRouter.put("/:listId/card/:cardId/order", orderOrSortCard);
 
 ///////// CARD Checklist ///////////////
 boardRouter.post("/:listId/card/:cardId/checklist", createChecklistItem);
