@@ -30,10 +30,21 @@ exports.createList = async (req, res, next) => {
 					if (doIHaveAccess) {
 						const isDuplicate = await List.exists({ $and: [{ spaceRef: spaceId }, { name: new RegExp(`^${name}$`, "i") }] });
 						if (!isDuplicate) {
+							// generate List order number
+							let orderNumber;
+							const existsCard = await List.exists({ $and: [{ spaceRef: spaceId }, { order: 1 }] });
+							if (existsCard) {
+								const highest = await List.findOne({ spaceRef: spaceId }).sort({ order: -1 }).select("order");
+								orderNumber = highest.order + 1;
+							} else {
+								orderNumber = 1;
+							}
+
 							const listStructure = new List({
 								name,
 								spaceRef: spaceId,
 								creator: user._id,
+								order: orderNumber,
 							});
 							const createList = await listStructure.save();
 
@@ -77,7 +88,7 @@ exports.getLists = async (req, res, next) => {
 			if (existsSpace) {
 				const doIHaveAccess = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
 				if (doIHaveAccess) {
-					let getLists = await List.find({ spaceRef: spaceId }).sort({ createdAt: -1 }).select("name").skip(skip).limit(limit);
+					let getLists = await List.find({ spaceRef: spaceId }).sort({ order: 1 }).select("name order").skip(skip).limit(limit);
 					if (getCards) {
 						getLists = JSON.parse(JSON.stringify(getLists));
 						for (const list of getLists) {
@@ -187,7 +198,7 @@ exports.deleteList = async (req, res, next) => {
 		const isValidSpaceId = isValidObjectId(spaceId);
 		const isValidListId = isValidObjectId(listId);
 		if (isValidSpaceId && isValidListId) {
-			const existsList = await List.findOne({ _id: listId }).select("spaceRef");
+			const existsList = await List.findOne({ _id: listId }).select("spaceRef order");
 			if (existsList) {
 				const existsSpace = await Space.exists({ _id: existsList.spaceRef });
 				if (existsSpace) {
@@ -198,6 +209,22 @@ exports.deleteList = async (req, res, next) => {
 						if (deleteList.deletedCount) {
 							res.json({ message: "Successfully deleted!" });
 
+							/****  START: lists order number rearrange ****/
+							const lists = await List.find({ $and: [{ order: { $gte: existsList.order } }, { spaceRef: existsList.spaceRef }] })
+								.sort({ order: 1 })
+								.select("_id");
+							let order = existsList.order;
+							for (const list of lists) {
+								await List.updateOne(
+									{ _id: list._id },
+									{
+										order,
+									}
+								);
+								order = order + 1;
+							}
+							/****  END: lists order number rearrange ****/
+
 							const findCard = await Card.find({ listRef: listId }).select("_id");
 							for (const card of findCard) {
 								await Checklist.deleteMany({ cardRef: card._id });
@@ -206,6 +233,129 @@ exports.deleteList = async (req, res, next) => {
 							await Card.deleteMany({ listRef: listId });
 						} else {
 							issue.message = "Failed to delete!";
+						}
+					} else {
+						issue.message = "You have no access to this space of the list!";
+					}
+				} else {
+					issue.message = "Not found space!";
+				}
+			} else {
+				issue.message = "Not found the list!";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.message = "Invalid space id!";
+			} else if (!isValidListId) {
+				issue.message = "Invalid list id!";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
+
+exports.orderOrSortList = async (req, res, next) => {
+	let { spaceId, listId } = req.params;
+	let { order } = req.body;
+
+	try {
+		let orderOk;
+		const user = req.user;
+		const issue = {};
+
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		if (isValidSpaceId && isValidListId) {
+			const existsList = await List.findOne({ _id: listId }).select("spaceRef order");
+			if (existsList) {
+				const existsSpace = await Space.exists({ _id: existsList.spaceRef });
+				if (existsSpace) {
+					const doIHaveAccess = await Space.exists({ $and: [{ _id: existsList.spaceRef }, { "members.member": user._id }] });
+					if (doIHaveAccess) {
+						// order check
+						if (order) {
+							order = parseInt(order);
+							if (order) {
+								if (order > 0) {
+									orderOk = true;
+								} else {
+									issue.order = "Order number number should be greater than 0!";
+								}
+							} else {
+								issue.order = "Invalid order number!";
+							}
+						} else {
+							issue.order = "Please provide order/sorting number!";
+						}
+
+						if (orderOk) {
+							if (existsList.order < order) {
+								/****  START: previous lists order number rearrange ****/
+								const lists = await List.find({ $and: [{ order: { $lte: order } }, { _id: { $ne: listId } }, { spaceRef: existsList.spaceRef }] })
+									.sort({ order: 1 })
+									.select("_id");
+
+								let orderNum = 1;
+								for (const list of lists) {
+									await List.updateOne(
+										{ _id: list._id },
+										{
+											order: orderNum,
+										}
+									);
+									orderNum = orderNum + 1;
+								}
+								/****  END: previous lists order number rearrange ****/
+							}
+
+							// Update lists order
+							await List.updateOne(
+								{ _id: listId },
+								{
+									order,
+								}
+							);
+
+							const list = await List.findOne({ _id: listId }).select("-createdAt -updatedAt -creator");
+
+							res.json({ updatedList: list });
+
+							if (existsList.order > order) {
+								/****  START: next lists order number rearrange ****/
+								const lists = await List.find({ $and: [{ order: { $gte: order } }, { _id: { $ne: listId } }, { spaceRef: existsList.spaceRef }] })
+									.sort({ order: 1 })
+									.select("_id");
+								let orderNum = order;
+								for (const list of lists) {
+									orderNum = orderNum + 1;
+									await List.updateOne(
+										{ _id: list._id },
+										{
+											order: orderNum,
+										}
+									);
+								}
+								/****  END: next lists order number rearrange ****/
+							}
+
+							/****  START: All lists order number rearrange ****/
+							const allLists = await List.find({ spaceRef: existsList.spaceRef }).sort({ order: 1 }).select("_id");
+							let orderNum = 1;
+							for (const list of allLists) {
+								await List.updateOne(
+									{ _id: list._id },
+									{
+										order: orderNum,
+									}
+								);
+								orderNum = orderNum + 1;
+							}
+							/****  END: All lists order number rearrange ****/
 						}
 					} else {
 						issue.message = "You have no access to this space of the list!";

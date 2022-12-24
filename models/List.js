@@ -16,6 +16,10 @@ const listSchema = new Schema(
 			ref: "User",
 			required: true,
 		},
+		order: {
+			type: Number,
+			required: true,
+		},
 	},
 	{
 		timestamps: true,
