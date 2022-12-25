@@ -14,9 +14,9 @@ boardRouter.post("/:listId/card", createCard);
 boardRouter.get("/:listId/card", getCards);
 boardRouter.get("/:listId/card/:cardId", getSingleCard);
 boardRouter.patch("/:listId/card/:cardId", multipart(), updateCard);
+boardRouter.delete("/:listId/card/:cardId", deleteCard);
 boardRouter.put("/:listId/card/:cardId/move", moveCard);
 boardRouter.copy("/:listId/card/:cardId/copy", copyCard);
-boardRouter.delete("/:listId/card/:cardId/delete", deleteCard);
 boardRouter.put("/:listId/card/:cardId/order", orderOrSortCard);
 
 ///////// CARD Checklist ///////////////
