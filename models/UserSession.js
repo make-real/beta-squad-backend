@@ -10,6 +10,7 @@ const userSessionSchema = new Schema(
 		sessionName: {
 			type: String,
 			default: "UserLoginSession",
+			enum: ["UserLoginSession", "email-verification", "password-recover"],
 		},
 		sessionUUID: {
 			type: String,
@@ -22,6 +23,16 @@ const userSessionSchema = new Schema(
 		expireDate: {
 			type: Date,
 			required: true,
+		},
+		code: Number,
+		codeMatched: Boolean,
+		wrongCodeTry: {
+			type: Number,
+			default: function () {
+				if (this.sessionName != "UserLoginSession") {
+					return 0;
+				}
+			},
 		},
 	},
 	{

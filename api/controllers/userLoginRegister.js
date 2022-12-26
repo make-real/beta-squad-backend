@@ -7,8 +7,9 @@ const { verifyGoogleToken } = require("../../utils/firebase/auth");
 const User = require("../../models/User");
 const UserSession = require("../../models/UserSession");
 
-const { isValidEmail, sendOtpVia, verifyOtp, usernameGenerating, generatePassword } = require("../../utils/func");
+const { isValidEmail, usernameGenerating, generatePassword, loginSessionCreate, sessionCreate } = require("../../utils/func");
 const { createToken, parseJWT } = require("../../utils/jwt");
+const { mailSend, verificationCodeMatch } = require("../../utils/mailgun");
 
 /**
  * Login an user
@@ -65,6 +66,10 @@ exports.login = async (req, res, next) => {
 				const userExists = await User.findOne({ email: decodeData.email }).select("+emailVerified +phoneVerified");
 				if (userExists) {
 					isUserExists = userExists;
+
+					if (!isUserExists.emailVerified) {
+						await User.updateOne({ _id: userExists._id }, { emailVerified: true });
+					}
 				} else {
 					let password = generatePassword(8);
 					const salt = bcrypt.genSaltSync(11);
@@ -84,19 +89,9 @@ exports.login = async (req, res, next) => {
 				}
 			}
 
-			const sessionUUID = uuid();
-			const expireDate = new Date();
-			expireDate.setDate(expireDate.getDate() + 30);
+			const loginSession = await loginSessionCreate(isUserExists._id);
 
-			const sessionStructure = new UserSession({
-				user: isUserExists._id,
-				sessionUUID,
-				expireDate,
-			});
-
-			const session = await sessionStructure.save();
-
-			const jwtToken = createToken(session._id, sessionUUID);
+			const jwtToken = createToken(loginSession._id, loginSession.sessionUUID);
 			const loggedUser = {
 				_id: isUserExists._id,
 				fullName: isUserExists.fullName,
@@ -213,12 +208,25 @@ exports.register = async (req, res, next) => {
 				password,
 			});
 
-			const codeSend = await sendOtpVia("email", email);
-			if (codeSend.accepted) {
+			const getSession = await sessionCreate(userStructure._id, "email-verification", 6, 15);
+
+			const subject = "Email verification code.";
+			const message = `<span style="font-size:16px;">Please verify your email address, code: <span style="font-weight:bold;">${getSession.code}</span></span>`;
+
+			const codeSendResponse = await mailSend(email, subject, message);
+
+			if (codeSendResponse.status === 200) {
 				await userStructure.save();
-				return res.status(201).json({ message: "Successfully registered!", userId: userStructure._id });
+
+				const session = {
+					sessionUUID: getSession.sessionUUID,
+					expireDate: getSession.expireDate,
+				};
+
+				return res.status(201).json({ message: "Successfully registered!", userId: userStructure._id, session });
 			} else {
-				issue.message = "Failed to send verification code!";
+				let m = codeSendResponse.status ? codeSendResponse : { message: codeSendResponse.message };
+				return res.status(codeSendResponse.status || 400).json({ issue: m });
 			}
 		}
 		return res.status(400).json({ issue });
@@ -234,60 +242,67 @@ exports.register = async (req, res, next) => {
  * @param {express.Response} res Express response object
  * @param {() => } next Express callback
  */
+
 exports.accountVerification = async (req, res, next) => {
-	let { userId, code } = req.body;
+	let { sessionUUID, code } = req.body;
 
 	try {
 		const issue = {};
-		let isValidUserId, codeOk;
-		if (userId) {
-			isValidUserId = isValidObjectId(userId);
+		let sessionIdOk, codeOk;
+		let session, userExist;
+		if (sessionUUID) {
+			session = await UserSession.findOne({ $and: [{ sessionUUID }, { sessionName: "email-verification" }] }).populate({
+				path: "user",
+				select: "email emailVerified",
+			});
+
+			if (session) {
+				if (session.expireDate > new Date()) {
+					if (session.user) {
+						userExist = session.user;
+						sessionIdOk = true;
+					} else {
+						issue.message = "Not found user!";
+					}
+				} else {
+					issue.message = "Session expired!";
+				}
+			} else {
+				issue.message = "Invalid sessionUUID";
+			}
 		} else {
-			issue.message = "Please provide user id";
+			issue.message = "Please provide sessionUUID";
 		}
 
 		if (code) {
-			code = Number(code);
-			if (String(code) != "NaN") {
-				codeOk = true;
-			} else {
-				issue.message = "Please provide the six digit code!";
-			}
+			codeOk = true;
 		} else {
 			issue.message = "Please provide verification code";
 		}
 
-		if (isValidUserId && codeOk) {
-			const userExist = await User.findOne({ _id: userId }).select("emailVerified");
-			if (userExist) {
-				if (!userExist.emailVerified) {
-					const matchedOtp = verifyOtp(userExist.email, code, next);
-					if (matchedOtp) {
-						const update = await User.updateOne({ _id: userId }, { emailVerified: true });
+		if (sessionIdOk && codeOk) {
+			const IsUserAlreadyVerified = userExist.emailVerified;
+			if (!IsUserAlreadyVerified) {
+				if (session.wrongCodeTry < 3) {
+					if (verificationCodeMatch(session.code, code)) {
+						const update = await User.updateOne({ _id: userExist._id }, { emailVerified: true });
 						if (update.modifiedCount) {
-							const sessionUUID = uuid();
-							const expireDate = new Date();
-							expireDate.setDate(expireDate.getDate() + 30);
+							await UserSession.deleteOne({ _id: session._id }); // Now delete the session
 
-							const sessionStructure = new UserSession({
-								user: userId,
-								sessionUUID,
-								expireDate,
-							});
+							const loginSession = await loginSessionCreate(userExist._id);
 
-							const session = await sessionStructure.save();
-
-							const jwtToken = createToken(session._id, sessionUUID);
-							return res.json({ message: "Your email is successfully verified!", jwtToken, loggedUser: userId });
+							const jwtToken = createToken(loginSession._id, loginSession.sessionUUID);
+							return res.json({ message: "Your email is successfully verified!", jwtToken, loggedUser: userExist._id });
 						}
 					} else {
-						issue.message = "Verification code was wrong!";
+						await UserSession.updateOne({ _id: session._id }, { $inc: { wrongCodeTry: 1 } });
+						issue.message = "Verification code was wrong! You can try only 3 times with wrong code!";
 					}
 				} else {
-					issue.message = "Your email is already verified";
+					issue.message = "You have already tried 3 times with the wrong code!";
 				}
 			} else {
-				issue.message = "There is no user with the id";
+				issue.message = "Your email is already verified";
 			}
 		}
 
@@ -297,6 +312,56 @@ exports.accountVerification = async (req, res, next) => {
 	}
 };
 
+exports.resendVerificationCode = async (req, res, next) => {
+	let { email } = req.body;
+
+	try {
+		const issue = {};
+		if (email) {
+			if (isValidEmail(email)) {
+				const user = await User.findOne({ email }).select("email emailVerified");
+				if (user) {
+					if (!user.emailVerified) {
+						await UserSession.deleteMany({ $and: [{ user: user._id }, { sessionName: "email-verification" }] }); // Before create new session, delete old sessions
+
+						const getSession = await sessionCreate(user._id, "email-verification", 6, 15);
+
+						const subject = "Re-send email verification code.";
+						const message = `<span style="font-size:16px;">Please verify your email address, code: <span style="font-weight:bold;">${getSession.code}</span></span>`;
+
+						const codeSendResponse = await mailSend(user.email, subject, message);
+						if (codeSendResponse.status === 200) {
+							const session = {
+								sessionUUID: getSession.sessionUUID,
+								expireDate: getSession.expireDate,
+							};
+							return res.json({
+								message: "Successfully re-sent verification code!",
+								userId: user._id,
+								session,
+							});
+						} else {
+							let m = codeSendResponse.status ? codeSendResponse : { message: codeSendResponse.message };
+							return res.status(codeSendResponse.status || 400).json({ issue: m });
+						}
+					} else {
+						issue.message = "You are already verified, you don't need to send a code. Just login!";
+					}
+				} else {
+					issue.message = "Not found user!";
+				}
+			} else {
+				issue.message = "Invalid email";
+			}
+		} else {
+			issue.message = "Please provide email";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
 /**
  * Logout an user
  *

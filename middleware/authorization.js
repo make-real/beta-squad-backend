@@ -14,7 +14,7 @@ exports.userAuthorization = async (req, res, next) => {
 			if (!jwt_payload.error) {
 				if (jwt_payload.sessionId && isValidObjectId(jwt_payload.sessionId)) {
 					const loginSession = await UserSession.findOne({
-						$and: [{ _id: jwt_payload.sessionId }, { sessionUUID: jwt_payload.sessionUUID }],
+						$and: [{ _id: jwt_payload.sessionId }, { sessionUUID: jwt_payload.sessionUUID }, { sessionName: "UserLoginSession" }],
 					}).populate({
 						path: "user",
 						select: "+emailVerified +phoneVerified +socketId",
