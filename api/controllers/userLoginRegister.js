@@ -25,7 +25,7 @@ exports.login = async (req, res, next) => {
 
 		let emailOk, passwordOk, googleAuthTOkenOk, isUserExists;
 		if (email) {
-			email = String(email).replace(/  +/g, "").trim();
+			email = String(email).replace(/\s+/g, "").trim().toLowerCase();
 			isUserExists = await User.findOne({ email }).select("+password +emailVerified +phoneVerified");
 			if (isUserExists) {
 				isUserExists = JSON.parse(JSON.stringify(isUserExists));
@@ -140,7 +140,7 @@ exports.register = async (req, res, next) => {
 
 		// check email
 		if (email) {
-			email = String(email).replace(/  +/g, "").trim();
+			email = String(email).replace(/\s+/g, "").trim().toLowerCase();
 			const emailLengthOk = email.length < 40;
 			if (emailLengthOk) {
 				if (isValidEmail(email)) {
@@ -318,6 +318,7 @@ exports.resendVerificationCode = async (req, res, next) => {
 	try {
 		const issue = {};
 		if (email) {
+			email = String(email).replace(/\s+/g, "").trim().toLowerCase();
 			if (isValidEmail(email)) {
 				const user = await User.findOne({ email }).select("email emailVerified");
 				if (user) {
@@ -418,7 +419,7 @@ exports.recoverPassword = async (req, res, next) => {
 
 		let emailOrPhoneOk, isUserExists;
 		if (emailOrPhone) {
-			emailOrPhone = String(emailOrPhone).replace(/\s+/g, " ").trim().toLowerCase();
+			emailOrPhone = String(emailOrPhone).replace(/\s+/g, "").trim().toLowerCase();
 			isUserExists = await User.findOne({ $or: [{ email: emailOrPhone }, { phone: emailOrPhone }] }).select("email");
 			if (isUserExists) {
 				isUserExists.toObject();
@@ -607,6 +608,9 @@ exports.resetPassword = async (req, res, next) => {
 
 				if (updatePassword.modifiedCount) {
 					await UserSession.deleteOne({ _id: getSession._id }); // Now delete the session
+
+					// Logout from others device
+					await UserSession.deleteMany({ $and: [{ user: userExist._id }, { sessionName: "UserLoginSession" }] });
 
 					return res.json({ message: "Password successfully recovered!" });
 				} else {

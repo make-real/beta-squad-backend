@@ -11,6 +11,7 @@ const CommentChat = require("../../models/CommentChat");
 const UserSession = require("../../models/UserSession");
 const { isValidEmail } = require("../../utils/func");
 const { imageCheck, upload } = require("../../utils/file");
+const { parseJWT } = require("../../utils/jwt");
 
 /**
  * Get user list or search users with fullName and email
@@ -192,6 +193,10 @@ exports.updateProfile = async (req, res, next) => {
 							const salt = bcrypt.genSaltSync(11);
 							newPassword = bcrypt.hashSync(newPassword, salt);
 							newPasswordOk = true;
+
+							const jwt_payload = parseJWT(req.headers.authorization.split(" ")[1]);
+							// Logout from others device
+							await UserSession.deleteMany({ $and: [{ _id: { $ne: jwt_payload.sessionId } }, { user: user._id }, { sessionName: "UserLoginSession" }] });
 						} else {
 							issue.newPassword = "Current password can not be a new password!";
 						}
