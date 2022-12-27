@@ -399,3 +399,226 @@ exports.logout = async (req, res, next) => {
 		return next(error);
 	}
 };
+
+/**
+ ******************************* Forget password *************************
+ */
+
+/**
+ * Send code to recover password
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.recoverPassword = async (req, res, next) => {
+	let { emailOrPhone } = req.body;
+	try {
+		const issue = {};
+
+		let emailOrPhoneOk, isUserExists;
+		if (emailOrPhone) {
+			emailOrPhone = String(emailOrPhone).replace(/\s+/g, " ").trim().toLowerCase();
+			isUserExists = await User.findOne({ $or: [{ email: emailOrPhone }, { phone: emailOrPhone }] }).select("email");
+			if (isUserExists) {
+				isUserExists.toObject();
+				emailOrPhoneOk = true;
+			} else {
+				issue.message = "There is no associated account with the email/phone!";
+			}
+		} else {
+			issue.message = "Please enter your email or phone!";
+		}
+
+		if (emailOrPhoneOk) {
+			await UserSession.deleteMany({ $and: [{ user: isUserExists._id }, { sessionName: "password-recover" }] }); // Before create new session, delete old sessions
+			const getSession = await sessionCreate(isUserExists._id, "password-recover", 6, 15);
+
+			const subject = "Password recover code.";
+			const message = `<span style="font-size:16px;">Recently you have requested a code to recover your account, code: <span style="font-weight:bold;">${getSession.code}</span></span>`;
+
+			const codeSendResponse = await mailSend(isUserExists.email, subject, message);
+			if (codeSendResponse.status === 200) {
+				const session = {
+					sessionUUID: getSession.sessionUUID,
+					expireDate: getSession.expireDate,
+				};
+
+				return res.json({ message: "Code sent successfully to your email!", session });
+			} else {
+				let m = codeSendResponse.status ? codeSendResponse : { message: codeSendResponse.message };
+				return res.status(codeSendResponse.status || 400).json({ issue: m });
+			}
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
+ * Verify code to recover password
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.verifyRecoverCode = async (req, res, next) => {
+	let { sessionUUID, code } = req.body;
+
+	try {
+		const issue = {};
+		let sessionIdOk, codeOk;
+		let session;
+		if (sessionUUID) {
+			session = await UserSession.findOne({ $and: [{ sessionUUID }, { sessionName: "password-recover" }] }).populate({
+				path: "user",
+				select: "email",
+			});
+
+			if (session) {
+				if (!session.codeMatched) {
+					if (session.expireDate > new Date()) {
+						if (session.user) {
+							sessionIdOk = true;
+						} else {
+							issue.message = "Not found user!";
+						}
+					} else {
+						issue.message = "Session expired!";
+					}
+				} else {
+					issue.message = "Session already used!";
+				}
+			} else {
+				issue.message = "Invalid sessionUUID";
+			}
+		} else {
+			issue.message = "Please provide sessionUUID";
+		}
+
+		if (code) {
+			codeOk = true;
+		} else {
+			issue.message = "Please provide verification code";
+		}
+
+		if (sessionIdOk && codeOk) {
+			if (session.wrongCodeTry < 3) {
+				if (verificationCodeMatch(session.code, code)) {
+					await UserSession.updateOne(
+						{ $and: [{ sessionUUID: session.sessionUUID }, { sessionName: "password-recover" }] },
+						{
+							codeMatched: true,
+						}
+					);
+
+					const ss = {
+						sessionUUID: session.sessionUUID,
+						expireDate: session.expireDate,
+					};
+					return res.json({ message: "Code matched, Now you can reset your password!", session: ss });
+				} else {
+					await UserSession.updateOne({ _id: session._id }, { $inc: { wrongCodeTry: 1 } });
+					issue.message = "Verification code was wrong! You can try only 3 times with wrong code!";
+				}
+			} else {
+				issue.message = "You have already tried 3 times with the wrong code!";
+			}
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+/**
+ * Reset password
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.resetPassword = async (req, res, next) => {
+	let { sessionUUID, password } = req.body;
+
+	try {
+		const issue = {};
+		let sessionUUIDOk, passwordOk;
+		let getSession, userExist;
+		if (sessionUUID) {
+			getSession = await UserSession.findOne({ $and: [{ sessionUUID }, { sessionName: "password-recover" }] }).populate({
+				path: "user",
+				select: "email password",
+			});
+			if (getSession) {
+				userExist = getSession.user;
+				if (getSession.expireDate > new Date()) {
+					if (getSession.codeMatched) {
+						sessionUUIDOk = true;
+					} else {
+						issue.sessionUUID = "First verify the session with the code you received!";
+					}
+				} else {
+					issue.sessionUUID = "Session expired!";
+				}
+			} else {
+				issue.sessionUUID = "Invalid sessionUUID!";
+			}
+		} else {
+			issue.sessionUUID = "Please provide sessionUUID";
+		}
+
+		if (password) {
+			if (password.length >= 8 && password.length <= 32) {
+				const strongPasswordRegex = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,32}$/;
+				const passwordStrong = password.match(strongPasswordRegex);
+				if (passwordStrong) {
+					if (userExist) {
+						const isItCurrentPassword = bcrypt.compareSync(password, userExist.password);
+						if (!isItCurrentPassword) {
+							const salt = bcrypt.genSaltSync(11);
+							password = bcrypt.hashSync(password, salt);
+							passwordOk = true;
+						} else {
+							issue.password = "Please use a new password instead of old password!";
+						}
+					}
+				} else {
+					issue.password = "Please enter strong password!";
+				}
+			} else {
+				issue.password = "Password length should be 8 to 32 characters long!";
+			}
+		} else {
+			issue.password = "Please enter new password!";
+		}
+
+		if (sessionUUIDOk && passwordOk) {
+			if (userExist) {
+				const updatePassword = await User.updateOne(
+					{ _id: userExist._id },
+					{
+						password,
+					}
+				);
+
+				if (updatePassword.modifiedCount) {
+					await UserSession.deleteOne({ _id: getSession._id }); // Now delete the session
+
+					return res.json({ message: "Password successfully recovered!" });
+				} else {
+					issue.message = "Failed to update password!";
+				}
+			} else {
+				issue.message = "Something is wrong!";
+			}
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
