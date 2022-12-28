@@ -70,6 +70,15 @@ const cardSchema = new Schema(
 			ref: "User",
 			required: true,
 		},
+		seenBy: {
+			type: [
+				{
+					type: Schema.Types.ObjectId,
+					ref: "User",
+				},
+			],
+			select: false,
+		},
 	},
 	{
 		timestamps: true,

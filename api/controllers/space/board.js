@@ -92,9 +92,9 @@ exports.getLists = async (req, res, next) => {
 					if (getCards) {
 						getLists = JSON.parse(JSON.stringify(getLists));
 						for (const list of getLists) {
-							list.cards = await Card.find({ listRef: list._id })
+							let cards = await Card.find({ listRef: list._id })
 								.sort({ order: 1 })
-								.select("name progress tags startDate endDate order spaceRef listRef color")
+								.select("name progress tags startDate endDate order spaceRef listRef color seenBy")
 								.populate([
 									{
 										path: "tags",
@@ -109,6 +109,12 @@ exports.getLists = async (req, res, next) => {
 										select: "fullName username avatar",
 									},
 								]);
+							cards = JSON.parse(JSON.stringify(cards));
+							for (const card of cards) {
+								card.seen = card.seenBy.includes(String(user._id));
+								delete card.seenBy;
+							}
+							list.cards = cards;
 						}
 					}
 
@@ -494,9 +500,9 @@ exports.getCards = async (req, res, next) => {
 				if (existsSpace) {
 					const doIHaveAccess = await Space.exists({ $and: [{ _id: existsList.spaceRef }, { "members.member": user._id }] });
 					if (doIHaveAccess) {
-						const getCards = await Card.find({ listRef: listId })
+						let getCards = await Card.find({ listRef: listId })
 							.sort({ order: 1 })
-							.select("name progress tags startDate endDate order spaceRef listRef color")
+							.select("name progress tags startDate endDate order spaceRef listRef color seenBy")
 							.populate([
 								{
 									path: "tags",
@@ -513,6 +519,12 @@ exports.getCards = async (req, res, next) => {
 							])
 							.skip(skip)
 							.limit(limit);
+						getCards = JSON.parse(JSON.stringify(getCards));
+
+						for (const card of getCards) {
+							card.seen = card.seenBy.includes(String(user._id));
+							delete card.seenBy;
+						}
 
 						return res.json({ cards: getCards });
 					} else {
@@ -573,6 +585,13 @@ exports.getSingleCard = async (req, res, next) => {
 									select: "fullName username avatar",
 								},
 							]);
+
+						// Mark as seen this card for this user
+						Card.exists({ $and: [{ _id: cardId }, { seenBy: user._id }] }).then((data) => {
+							if (!data) {
+								Card.updateOne({ _id: cardId }, { $push: { seenBy: user._id } }).then();
+							}
+						});
 
 						return res.json({ card: getCard });
 					} else {
@@ -823,6 +842,7 @@ exports.updateCard = async (req, res, next) => {
 										progress,
 										startDate,
 										endDate,
+										seenBy: [user._id], // Mark as unseen this card to all as updated card
 										$push: {
 											tags: tagId,
 											assignee: assignUser,
@@ -1747,6 +1767,18 @@ exports.createComment = async (req, res, next) => {
 					{ $push: { seenBy: user._id } }
 				).then();
 				// Operation End
+
+				// Mark as unseen this card who are mentioned in this comment
+				if (mentionedUsers.length) {
+					await Card.updateOne(
+						{ _id: cardId },
+						{
+							$pull: {
+								seenBy: { $in: mentionedUsers },
+							},
+						}
+					);
+				}
 			}
 		}
 

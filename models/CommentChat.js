@@ -23,6 +23,7 @@ const commentChatSchema = new Schema(
 		},
 		content: {
 			type: {
+				_id: false,
 				text: String,
 				attachments: [
 					{
