@@ -376,6 +376,58 @@ exports.getMessages = async (req, res, next) => {
 	}
 };
 
+exports.messageDelete = async (req, res, next) => {
+	let { workspaceId, receiver, messageId } = req.params;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		// check workspaceId, receiverId, messageId
+		const isValidWorkspaceId = isValidObjectId(workspaceId);
+		const isValidReceiverId = isValidObjectId(receiver);
+		const isValidMessageId = isValidObjectId(messageId);
+		if (isValidWorkspaceId && isValidReceiverId && isValidMessageId) {
+			const existsChat = await Chat.exists({ _id: messageId });
+			if (existsChat) {
+				const chatAccess = await Chat.exists({ $and: [{ _id: messageId }, { sender: user._id }] });
+				if (chatAccess) {
+					const deleteChat = await Chat.updateOne(
+						{ _id: messageId },
+						{
+							deleted: true,
+						}
+					);
+
+					if (deleteChat.modifiedCount) {
+						res.json({ message: "Successfully deleted the chat message!" });
+					} else {
+						issue.messageId = "Failed to delete!";
+					}
+				}
+			} else {
+				issue.cardId = "Message Already may deleted!";
+			}
+		} else {
+			if (!isValidWorkspaceId) {
+				issue.workspaceId = "Invalid workspace id";
+			}
+			if (!isValidReceiverId) {
+				issue.receiver = "Invalid receiver id";
+			}
+			if (!isValidMessageId) {
+				issue.messageId = "Invalid message id";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
+
 exports.getChatList = async (req, res, next) => {
 	const { workspaceId } = req.params;
 	let { skip, limit, search } = req.query;
