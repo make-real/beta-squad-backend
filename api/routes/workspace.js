@@ -2,6 +2,7 @@ const workspaceRouter = require("express").Router();
 const multipart = require("connect-multiparty");
 
 const { createWorkspace, getWorkspaces, getSingleWorkspace, updateWorkspace, deleteWorkspace, addTeamMembers, teamMembers, roleChangeAndRemoveTeamMembers, ownerShipTransferOfWorkspace, leaveFromWorkspace, settingsUpdate, getSettings, createTags, getTags, editTags, deleteTags } = require("../controllers/workspace");
+const chatRoutes = require("./chat");
 
 workspaceRouter.post("/", multipart(), createWorkspace);
 workspaceRouter.get("/", getWorkspaces);
@@ -21,5 +22,6 @@ workspaceRouter.post("/:workspaceId/tags", createTags);
 workspaceRouter.get("/:workspaceId/tags", getTags);
 workspaceRouter.patch("/:workspaceId/tags/:tagId", editTags);
 workspaceRouter.delete("/:workspaceId/tags/:tagId", deleteTags);
+workspaceRouter.use("/:workspaceId/chat/", chatRoutes);
 
 module.exports = workspaceRouter;

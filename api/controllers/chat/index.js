@@ -7,8 +7,8 @@ const User = require("../../../models/User");
 const Workspace = require("../../../models/Workspace");
 
 exports.sendMessage = async (req, res, next) => {
-	const { workspaceId } = req.params;
-	let { sendTo, textMessage, replayOf } = req.body;
+	const { workspaceId, receiver: sendTo } = req.params;
+	let { textMessage, replayOf } = req.body;
 
 	let mentionedUsers = [],
 		attachmentsUrls = [],
@@ -245,8 +245,8 @@ exports.sendMessage = async (req, res, next) => {
 };
 
 exports.getMessages = async (req, res, next) => {
-	const { workspaceId } = req.params;
-	let { skip, limit, participant } = req.query;
+	const { workspaceId, receiver } = req.params;
+	let { skip, limit } = req.query;
 
 	try {
 		const user = req.user;
@@ -276,13 +276,13 @@ exports.getMessages = async (req, res, next) => {
 			issue.workspaceId = "Please provide workspace Id!";
 		}
 
-		// participant check
-		if (participant) {
-			if (isValidObjectId(participant)) {
-				var participantExists = await User.findOne({ _id: participant }).select("socketId");
+		// receiver check
+		if (receiver) {
+			if (isValidObjectId(receiver)) {
+				var participantExists = await User.findOne({ _id: receiver }).select("socketId");
 				if (participantExists) {
 					if (workspaceExists) {
-						const participantExistsInWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": participant }] });
+						const participantExistsInWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": receiver }] });
 						if (participantExistsInWorkspace) {
 							participantToOk = true;
 						} else {
@@ -290,25 +290,26 @@ exports.getMessages = async (req, res, next) => {
 						}
 					}
 				} else {
-					issue.participant = "Participant doesn't exists!";
+					issue.receiver = "Participant doesn't exists!";
 				}
 			} else {
-				issue.participant = "Invalid mongo Id";
+				issue.receiver = "Invalid mongo Id";
 			}
 		} else {
-			issue.participant = "Please provide user Id where you want to send!";
+			issue.receiver = "Please provide user Id where you want to send!";
 		}
 
 		if (participantToOk && workspaceIdOk) {
-			const chatHeader = await ChatHeader.findOne({ $and: [{ workSpaceRef: workspaceId }, { "participants.user": user._id }, { "participants.user": participant }] });
+			const chatHeader = await ChatHeader.findOne({ $and: [{ workSpaceRef: workspaceId }, { "participants.user": user._id }, { "participants.user": receiver }] });
 
 			let messages = [];
 			if (chatHeader) {
 				const getMessages = await Chat.find({
 					$and: [
 						{ chatHeaderRef: chatHeader._id },
+						{ deleted: false },
 						{
-							$or: [{ $and: [{ sender: user._id }, { to: participant }] }, { $and: [{ sender: participant }, { to: user._id }] }],
+							$or: [{ $and: [{ sender: user._id }, { to: receiver }] }, { $and: [{ sender: receiver }, { to: user._id }] }],
 						},
 					],
 				})

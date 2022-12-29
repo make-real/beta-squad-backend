@@ -1,10 +1,10 @@
-const chatRouter = require("express").Router();
+const chatRouter = require("express").Router({ mergeParams: true });
 const multipart = require("connect-multiparty");
 
 const { sendMessage, getMessages, getChatList } = require("../../controllers/chat");
 
-chatRouter.post("/:workspaceId/send-messages", multipart(), sendMessage);
-chatRouter.get("/:workspaceId/get-messages", getMessages);
-chatRouter.get("/:workspaceId", getChatList);
+chatRouter.post("/:receiver", multipart(), sendMessage);
+chatRouter.get("/:receiver", getMessages);
+chatRouter.get("/", getChatList);
 
 module.exports = chatRouter;
