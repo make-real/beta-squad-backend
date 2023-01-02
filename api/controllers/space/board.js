@@ -94,7 +94,7 @@ exports.getLists = async (req, res, next) => {
 						for (const list of getLists) {
 							let cards = await Card.find({ listRef: list._id })
 								.sort({ order: 1 })
-								.select("name progress tags startDate endDate order spaceRef listRef color seenBy")
+								.select("name progress description tags startDate endDate order spaceRef listRef color seenBy")
 								.populate([
 									{
 										path: "tags",
@@ -502,7 +502,7 @@ exports.getCards = async (req, res, next) => {
 					if (doIHaveAccess) {
 						let getCards = await Card.find({ listRef: listId })
 							.sort({ order: 1 })
-							.select("name progress tags startDate endDate order spaceRef listRef color seenBy")
+							.select("name progress description tags startDate endDate order spaceRef listRef color seenBy")
 							.populate([
 								{
 									path: "tags",
