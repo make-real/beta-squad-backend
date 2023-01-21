@@ -26,7 +26,7 @@ exports.login = async (req, res, next) => {
 		let emailOk, passwordOk, googleAuthTOkenOk, isUserExists;
 		if (email) {
 			email = String(email).replace(/\s+/g, "").trim().toLowerCase();
-			isUserExists = await User.findOne({ email }).select("+password +emailVerified +phoneVerified");
+			isUserExists = await User.findOne({ $and: [{ email }, { guest: { $ne: true } }] }).select("+password +emailVerified +phoneVerified");
 			if (isUserExists) {
 				isUserExists = JSON.parse(JSON.stringify(isUserExists));
 				emailOk = true;
@@ -63,18 +63,34 @@ exports.login = async (req, res, next) => {
 
 		if ((emailOk && passwordOk) || googleAuthTOkenOk) {
 			if (googleAuthTOkenOk) {
-				const userExists = await User.findOne({ email: decodeData.email }).select("+emailVerified +phoneVerified");
-				if (userExists) {
-					isUserExists = userExists;
+				const userExists = await User.findOne({ email: decodeData.email }).select("+emailVerified +phoneVerified +guest");
 
-					if (!isUserExists.emailVerified) {
-						await User.updateOne({ _id: userExists._id }, { emailVerified: true });
+				let password = generatePassword(8);
+				const salt = bcrypt.genSaltSync(11);
+				password = bcrypt.hashSync(password, salt);
+				if (userExists) {
+					isUserExists = JSON.parse(JSON.stringify(userExists));
+
+					if (isUserExists.guest) {
+						await User.deleteOne({ _id: isUserExists._id });
+						delete isUserExists.createdAt;
+						delete isUserExists.updatedAt;
+						delete isUserExists.guest;
+
+						const userStructure = new User({
+							...isUserExists,
+							fullName: decodeData.fullName,
+							phone: decodeData.phone,
+							password,
+							avatar: decodeData.picture,
+							emailVerified: true,
+						});
+						isUserExists = await userStructure.save();
+					} else {
+						await User.updateOne({ _id: isUserExists._id }, { emailVerified: true });
+						isUserExists.emailVerified = true;
 					}
 				} else {
-					let password = generatePassword(8);
-					const salt = bcrypt.genSaltSync(11);
-					password = bcrypt.hashSync(password, salt);
-
 					const userStructure = new User({
 						fullName: decodeData.fullName,
 						username: await usernameGenerating(decodeData.email),
@@ -83,7 +99,6 @@ exports.login = async (req, res, next) => {
 						password,
 						avatar: decodeData.picture,
 						emailVerified: true,
-						uid: Math.floor(Math.random() * 900000) + 100000,
 					});
 					const saveUser = await userStructure.save();
 					isUserExists = saveUser;
@@ -145,7 +160,8 @@ exports.register = async (req, res, next) => {
 			const emailLengthOk = email.length < 40;
 			if (emailLengthOk) {
 				if (isValidEmail(email)) {
-					const emailExist = await User.exists({ email });
+					const emailExist = await User.exists({ $and: [{ email }, { guest: { $ne: true } }] });
+					var guestUserExists = await User.findOne({ $and: [{ email }, { guest: true }] }).select("+emailVerified +phoneVerified +guest");
 					if (!emailExist) {
 						/* username generating */
 						var username = await usernameGenerating(email);
@@ -201,14 +217,30 @@ exports.register = async (req, res, next) => {
 		}
 
 		if (fullNameOk && emailOk && phoneOk && passwordOk) {
-			const userStructure = new User({
-				fullName,
-				username,
-				email,
-				phone,
-				password,
-				uid: Math.floor(Math.random() * 900000) + 100000,
-			});
+			if (guestUserExists?.guest) {
+				guestUserExists = JSON.parse(JSON.stringify(guestUserExists));
+
+				await User.deleteOne({ _id: guestUserExists._id });
+				delete guestUserExists.createdAt;
+				delete guestUserExists.updatedAt;
+				delete guestUserExists.guest;
+
+				var userStructure = new User({
+					...guestUserExists,
+					fullName,
+					email,
+					phone,
+					password,
+				});
+			} else {
+				userStructure = new User({
+					fullName,
+					username,
+					email,
+					phone,
+					password,
+				});
+			}
 
 			const getSession = await sessionCreate(userStructure._id, "email-verification", 6, 15);
 

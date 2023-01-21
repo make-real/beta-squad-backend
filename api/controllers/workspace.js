@@ -1,6 +1,6 @@
 const { isValidObjectId } = require("mongoose");
 const { imageCheck, upload } = require("../../utils/file");
-const { isValidEmail } = require("../../utils/func");
+const { isValidEmail, usernameGenerating } = require("../../utils/func");
 const { defaultTags } = require("../../config/centralVariables");
 const User = require("../../models/User");
 const Workspace = require("../../models/Workspace");
@@ -424,7 +424,7 @@ exports.deleteWorkspace = async (req, res, next) => {
  */
 exports.addTeamMembers = async (req, res, next) => {
 	let { workspaceId } = req.params;
-	let { userEmail } = req.body;
+	let { userEmail, guest } = req.body;
 
 	try {
 		const user = req.user;
@@ -452,7 +452,16 @@ exports.addTeamMembers = async (req, res, next) => {
 					if (doIHaveAccessToUpdate) {
 						userEmail = String(userEmail).replace(/  +/g, "").trim();
 						if (userEmail && isValidEmail(userEmail)) {
-							const userExists = await User.findOne({ email: userEmail }).select("_id");
+							let userExists = await User.findOne({ email: userEmail }).select("_id");
+							if (!userExists && guest) {
+								const guestUser = new User({
+									fullName: "Guest",
+									email: userEmail,
+									username: await usernameGenerating(userEmail),
+									guest: true,
+								});
+								userExists = await guestUser.save();
+							}
 							if (userExists) {
 								const allReadyExistsInWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": userExists._id }] });
 								if (!allReadyExistsInWorkspace) {

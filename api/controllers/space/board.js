@@ -1,13 +1,14 @@
 const { isValidObjectId } = require("mongoose");
 const User = require("../../../models/User");
 const Space = require("../../../models/Space");
+const Workspace = require("../../../models/Workspace");
 const List = require("../../../models/List");
 const Card = require("../../../models/Card");
 const Checklist = require("../../../models/Checklist");
 const CommentChat = require("../../../models/CommentChat");
 const Tag = require("../../../models/Tag");
 const { multipleFilesCheckAndUpload } = require("../../../utils/file");
-const { splitSpecificParts, hexAColorGen } = require("../../../utils/func");
+const { isValidEmail, usernameGenerating, splitSpecificParts, hexAColorGen } = require("../../../utils/func");
 
 exports.createList = async (req, res, next) => {
 	let { spaceId } = req.params;
@@ -754,11 +755,72 @@ exports.updateCard = async (req, res, next) => {
 
 						// assign user check
 						if (assignUser) {
-							if (isValidObjectId(assignUser)) {
-								const userExists = await User.exists({ _id: assignUser });
-								if (userExists) {
-									const assignUserExistsInSpace = await Space.exists({ $and: [{ _id: cardExists.spaceRef }, { "members.member": assignUser }] });
-									if (assignUserExistsInSpace) {
+							const imIOwnerOfTheWorkspace = await Workspace.findOne({
+								$and: [
+									{ _id: existsSpace.workSpaceRef },
+									{
+										teamMembers: {
+											$elemMatch: {
+												member: user._id,
+												role: "owner",
+											},
+										},
+									},
+								],
+							}).select("_id");
+							const isValidAssignUserId = isValidObjectId(assignUser);
+							if (isValidAssignUserId || isValidEmail(assignUser)) {
+								let assignUserData;
+								if (isValidAssignUserId) {
+									assignUserData = await User.findOne({ _id: assignUser }).select("_id guest");
+								} else if (isValidEmail(assignUser)) {
+									assignUser = String(assignUser).toLowerCase();
+									assignUserData = await User.findOne({ email: assignUser }).select("_id guest");
+
+									if (!assignUserData) {
+										const guestUser = new User({
+											fullName: "Guest",
+											email: assignUser,
+											username: await usernameGenerating(assignUser),
+											guest: true,
+										});
+										assignUserData = await guestUser.save();
+									}
+								}
+
+								if (assignUserData) {
+									assignUser = assignUserData._id;
+									if (!assignUserData.guest || imIOwnerOfTheWorkspace) {
+										const assignUserExistsInSpace = await Space.exists({ $and: [{ _id: cardExists.spaceRef }, { "members.member": assignUser }] });
+										if (!assignUserExistsInSpace) {
+											const assignUserExistsInWorkspace = await Workspace.exists({ $and: [{ _id: existsSpace.workSpaceRef }, { "teamMembers.member": assignUser }] });
+											if (!assignUserExistsInWorkspace) {
+												// User push in Workspace
+												await Workspace.updateOne(
+													{ _id: existsSpace.workSpaceRef },
+													{
+														$push: {
+															teamMembers: {
+																member: assignUser,
+															},
+														},
+													}
+												);
+											}
+
+											// Members push in space
+											await Space.updateOne(
+												{ _id: cardExists.spaceRef },
+												{
+													$push: {
+														members: {
+															member: assignUser,
+														},
+													},
+												}
+											);
+										}
+
 										const theUserAlreadyAssignee = await Card.exists({ $and: [{ _id: cardId }, { assignee: assignUser }] });
 										if (!theUserAlreadyAssignee) {
 											assignUserOk = true;
@@ -766,13 +828,17 @@ exports.updateCard = async (req, res, next) => {
 											issue.assignUser = "Tried assign users is already assigned to the Card!";
 										}
 									} else {
-										issue.assignUser = "Assign users must first add to space!!";
+										issue.assignUser = "Only owner can assign guest user!";
 									}
 								} else {
-									issue.assignUser = "Assign user does't exists!";
+									issue.assignUser = "There is no user with this obj id!";
 								}
 							} else {
-								issue.assignUser = "Invalid assignUser id!";
+								if (isValidAssignUserId) {
+									issue.assignUser = "Invalid assignUser id!";
+								} else {
+									issue.assignUser = "Invalid email!";
+								}
 							}
 						} else {
 							assignUser = undefined;

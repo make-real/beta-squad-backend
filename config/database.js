@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+mongoose.set("strictQuery", true);
 
 function databaseConnection() {
 	const { DB_URI_CLOUD, DB_URI_LOCAL, NODE_ENV } = process.env;

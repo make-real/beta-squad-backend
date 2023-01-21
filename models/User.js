@@ -10,6 +10,7 @@ const userSchema = new Schema(
 			type: Number,
 			unique: true,
 			required: true,
+			default: () => Math.floor(Math.random() * 900000) + 100000,
 		},
 		username: {
 			type: String,
@@ -26,7 +27,11 @@ const userSchema = new Schema(
 		},
 		password: {
 			type: String,
-			required: true,
+			required: function () {
+				if (!this.guest) {
+					return true;
+				}
+			},
 			select: false,
 		},
 		emailVerified: {
@@ -49,6 +54,10 @@ const userSchema = new Schema(
 		lastOnline: {
 			type: Date,
 			default: new Date(),
+		},
+		guest: {
+			type: Boolean,
+			select: false,
 		},
 	},
 	{

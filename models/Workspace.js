@@ -9,6 +9,7 @@ const workspaceSchema = new Schema(
 		teamMembers: {
 			type: [
 				{
+					_id: false,
 					member: {
 						type: Schema.Types.ObjectId,
 						ref: "User",
