@@ -60,7 +60,7 @@ exports.userAuthorization = async (req, res, next) => {
 			console.log(`Socket: ${issue.message}`);
 			return next(new Error("invalid"));
 		}
-		return res.status(401).json({ issue });
+		return res?.status(401)?.json({ issue });
 	} catch (err) {
 		next(err);
 	}

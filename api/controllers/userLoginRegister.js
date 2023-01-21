@@ -83,6 +83,7 @@ exports.login = async (req, res, next) => {
 						password,
 						avatar: decodeData.picture,
 						emailVerified: true,
+						uid: Math.floor(Math.random() * 900000) + 100000,
 					});
 					const saveUser = await userStructure.save();
 					isUserExists = saveUser;
@@ -206,6 +207,7 @@ exports.register = async (req, res, next) => {
 				email,
 				phone,
 				password,
+				uid: Math.floor(Math.random() * 900000) + 100000,
 			});
 
 			const getSession = await sessionCreate(userStructure._id, "email-verification", 6, 15);
