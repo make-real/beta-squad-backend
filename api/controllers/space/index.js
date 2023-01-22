@@ -138,22 +138,51 @@ exports.getSpaces = async (req, res, next) => {
 
 		if (workspaceId) {
 			if (isValidObjectId(workspaceId)) {
-				let searchQuery = {};
-				if (searchKeyWord) {
-					function es(str) {
-						return str.replace(/[-\/\\^$*+?()|[\]{}]/g, "");
+				const existsWorkspace = await Workspace.exists({ _id: workspaceId });
+				if (existsWorkspace) {
+					const doIHaveAccessInWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": user._id }] });
+					if (doIHaveAccessInWorkspace) {
+						const amIOwnerOfWorkspace = await Workspace.exists({
+							$and: [
+								{ _id: workspaceId },
+								{
+									teamMembers: {
+										$elemMatch: {
+											member: user._id,
+											role: "owner",
+										},
+									},
+								},
+							],
+						});
+
+						let searchQuery = {};
+						if (searchKeyWord) {
+							function es(str) {
+								return str.replace(/[-\/\\^$*+?()|[\]{}]/g, "");
+							}
+							const KeyWordRegExp = new RegExp("^" + es(searchKeyWord), "i"); // Match from starting
+							searchQuery = { name: KeyWordRegExp };
+						}
+
+						let query = {};
+						if (amIOwnerOfWorkspace) {
+							// Workspace's owner can see all the spaces of the workspace.
+							query = { $and: [{ workSpaceRef: workspaceId }, searchQuery] };
+						} else {
+							// Workspace's users can see all the public spaces and only the private spaces where the user has been added.
+							query = { $and: [{ workSpaceRef: workspaceId }, { $or: [{ "members.member": user._id }, { privacy: "public" }] }, searchQuery] };
+						}
+
+						const getSpace = await Space.find(query).sort({ createdAt: -1 }).select("-workSpaceRef").skip(skip).limit(limit);
+
+						return res.json({ spaces: getSpace });
+					} else {
+						issue.message = "You are not the member of the workspace!";
 					}
-					const KeyWordRegExp = new RegExp("^" + es(searchKeyWord), "i"); // Match from starting
-					searchQuery = { name: KeyWordRegExp };
+				} else {
+					issue.message = "Not found workspace!";
 				}
-
-				const getSpace = await Space.find({ $and: [{ "members.member": user._id }, { workSpaceRef: workspaceId }, searchQuery] })
-					.sort({ createdAt: -1 })
-					.select("-workSpaceRef")
-					.skip(skip)
-					.limit(limit);
-
-				return res.json({ spaces: getSpace });
 			} else {
 				issue.message = "Invalid workspace id!";
 			}
@@ -186,30 +215,64 @@ exports.getSpaceDetails = async (req, res, next) => {
 
 		if (spaceId) {
 			if (isValidObjectId(spaceId)) {
-				const spaceExists = await Space.exists({ _id: spaceId });
+				const spaceExists = await Space.findOne({ _id: spaceId }).select("workSpaceRef");
+				const workspaceId = spaceExists.workSpaceRef;
 				if (spaceExists) {
-					const amIMemberOfThisSpace = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
-					if (amIMemberOfThisSpace) {
-						let getSpace = await Space.findOne(
-							{ _id: spaceId },
-							{
-								members: { $slice: [skip, limit] },
+					const existsWorkspace = await Workspace.exists({ _id: workspaceId });
+					if (existsWorkspace) {
+						const doIHaveAccessInWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": user._id }] });
+						if (doIHaveAccessInWorkspace) {
+							const amIOwnerOfWorkspace = await Workspace.exists({
+								$and: [
+									{ _id: workspaceId },
+									{
+										teamMembers: {
+											$elemMatch: {
+												member: user._id,
+												role: "owner",
+											},
+										},
+									},
+								],
+							});
+
+							let query = {};
+							if (amIOwnerOfWorkspace) {
+								// Workspace's owner can see any space of the workspace.
+								query = { _id: spaceId };
+							} else {
+								// Workspace's users can see any public space and only the private space where the user has been added.
+								query = { $and: [{ _id: spaceId }, { $or: [{ "members.member": user._id }, { privacy: "public" }] }] };
 							}
-						).select("+members");
 
-						getSpace = JSON.parse(JSON.stringify(getSpace));
+							const amIMemberOfThisSpace = await Space.exists(query);
+							if (amIMemberOfThisSpace) {
+								let getSpace = await Space.findOne(
+									{ _id: spaceId },
+									{
+										members: { $slice: [skip, limit] },
+									}
+								).select("+members");
 
-						const spaceMembers = getSpace.members;
-						const members = [];
-						for (const single of spaceMembers) {
-							members.push(single.member);
+								getSpace = JSON.parse(JSON.stringify(getSpace));
+
+								const spaceMembers = getSpace.members;
+								const members = [];
+								for (const single of spaceMembers) {
+									members.push(single.member);
+								}
+								delete getSpace.members;
+								getSpace.activeMembers = await User.countDocuments({ $and: [{ _id: { $in: members } }, { socketId: { $ne: null } }] });
+
+								return res.json({ space: getSpace });
+							} else {
+								issue.message = "You're not a member of this space!";
+							}
+						} else {
+							issue.message = "You are not the member of the workspace of the space!";
 						}
-						delete getSpace.members;
-						getSpace.activeMembers = await User.countDocuments({ $and: [{ _id: { $in: members } }, { socketId: { $ne: null } }] });
-
-						return res.json({ space: getSpace });
 					} else {
-						issue.message = "You're not a member of this space!";
+						issue.message = "Workspace does not exists of this space!";
 					}
 				} else {
 					issue.message = "Space not found";
