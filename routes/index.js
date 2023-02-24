@@ -1,4 +1,5 @@
 const router = require("express").Router();
+const ErrorLog = require("../models/ErrorLog");
 
 const apiRoutes = require("../api/routes/index");
 
@@ -24,6 +25,20 @@ router.use((req, res, next) => {
 // error handler
 router.use((err, req, res, next) => {
 	console.error(err);
+
+	// Store Error Log
+	const errorLogStructure = new ErrorLog({
+		error: err,
+		method: req.method,
+		path: req.url,
+		payload: {
+			body: req.body,
+			params: req.params,
+			query: req.query,
+			headers: req.headers,
+		},
+	});
+	errorLogStructure.save();
 
 	const statusCode = err.status || 500;
 	const issue = {};
