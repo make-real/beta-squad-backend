@@ -9,7 +9,7 @@ const UserSession = require("../../models/UserSession");
 
 const { isValidEmail, usernameGenerating, generatePassword, loginSessionCreate, sessionCreate } = require("../../utils/func");
 const { createToken, parseJWT } = require("../../utils/jwt");
-const { mailSend, verificationCodeMatch } = require("../../utils/mailgun");
+const { mailSend, verificationCodeMatch } = require("../../utils/mail");
 
 /**
  * Login an user

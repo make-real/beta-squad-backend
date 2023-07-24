@@ -10,6 +10,7 @@
 		"dev": "nodemon app.js"
 	},
 	"dependencies": {
+		"@sendgrid/mail": "^7.7.0",
 		"agora-access-token": "^2.0.4",
 		"bcrypt": "^5.0.1",
 		"cloudinary": "^1.30.0",

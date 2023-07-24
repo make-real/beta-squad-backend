@@ -1,9 +1,7 @@
 const { isValidEmail } = require("./func");
-const Mailgun = require("mailgun.js");
-const formData = require("form-data");
-const mailgun = new Mailgun(formData);
-const apiKey = process.env.MAILGUN_API_KEY;
-const DOMAIN = process.env.MAILGUN_EMAIL_DOMAIN;
+const sgMail = require("@sendgrid/mail");
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+const SENDGRID_VERIFIED_SENDER = process.env.SENDGRID_VERIFIED_SENDER;
 
 async function mailSend(to, subject, message) {
 	if (process.env.MAIL_SEND_ENABLE === "false") {
@@ -33,19 +31,19 @@ async function mailSend(to, subject, message) {
 			}
 
 			if (mainValid) {
-				const mg = mailgun.client({
-					username: "api",
-					key: apiKey,
-				});
-				const result = await mg.messages.create(DOMAIN, {
-					from: `Beta Squad <no-replay@${DOMAIN}>`,
+				const msg = {
 					to: toSend,
+					from: SENDGRID_VERIFIED_SENDER,
 					subject,
 					// text: message,
 					html: message,
-				});
+				};
 
-				return result;
+				const result = await sgMail.send(msg);
+
+				return {
+					status: result[0]?.statusCode == 202 ? 200 : 400,
+				};
 			} else {
 				if (mainValid === false) {
 					issue.message = "There is an invalid email!";
@@ -59,7 +57,7 @@ async function mailSend(to, subject, message) {
 
 		throw new Error(issue.message);
 	} catch (error) {
-		error.message = `${error.message} - (mailgun)`;
+		error.message = `${error.message} - (sendGrid)`;
 		console.log(error);
 		return error;
 	}
