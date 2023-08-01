@@ -1,6 +1,7 @@
 const { isValidObjectId } = require("mongoose");
 const { imageCheck, upload } = require("../../utils/file");
 const { isValidEmail, usernameGenerating } = require("../../utils/func");
+const { mailSendWithDynamicTemplate } = require("../../utils/mail");
 const { defaultTags } = require("../../config/centralVariables");
 const User = require("../../models/User");
 const Workspace = require("../../models/Workspace");
@@ -452,7 +453,7 @@ exports.addTeamMembers = async (req, res, next) => {
 					if (doIHaveAccessToUpdate) {
 						userEmail = String(userEmail).replace(/  +/g, "").trim();
 						if (userEmail && isValidEmail(userEmail)) {
-							let userExists = await User.findOne({ email: userEmail }).select("_id");
+							let userExists = await User.findOne({ email: userEmail }).select("_id fullName email");
 							if (!userExists && guest) {
 								const guestUser = new User({
 									fullName: "Guest",
@@ -509,7 +510,15 @@ exports.addTeamMembers = async (req, res, next) => {
 											}
 										}
 
-										return res.json({ message: "Successfully added the user to the workspace as a team member!" });
+										res.json({ message: "Successfully added the user to the workspace as a team member!" });
+
+										const dynamicTemplateData = {
+											name: userExists.fullName,
+											addedBy: user.fullName,
+											workspaceName: workspaceExists.name,
+											directLink: "undefined",
+										};
+										mailSendWithDynamicTemplate(userExists.email, process.env.TEMPLATE_ID_MEMBER_ADD_IN_WORKSPACE, dynamicTemplateData);
 									} else {
 										issue.message = "Failed to updated!";
 									}
@@ -539,7 +548,9 @@ exports.addTeamMembers = async (req, res, next) => {
 			issue.message = "Please provide workspace id!";
 		}
 
-		return res.status(400).json({ issue });
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
 	} catch (err) {
 		next(err);
 	}

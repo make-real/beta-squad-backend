@@ -9,6 +9,7 @@ const CommentChat = require("../../../models/CommentChat");
 const Tag = require("../../../models/Tag");
 const { multipleFilesCheckAndUpload } = require("../../../utils/file");
 const { isValidEmail, usernameGenerating, splitSpecificParts, hexAColorGen } = require("../../../utils/func");
+const { mailSendWithDynamicTemplate } = require("../../../utils/mail");
 
 exports.createList = async (req, res, next) => {
 	let { spaceId } = req.params;
@@ -770,12 +771,12 @@ exports.updateCard = async (req, res, next) => {
 							}).select("_id");
 							const isValidAssignUserId = isValidObjectId(assignUser);
 							if (isValidAssignUserId || isValidEmail(assignUser)) {
-								let assignUserData;
+								var assignUserData;
 								if (isValidAssignUserId) {
-									assignUserData = await User.findOne({ _id: assignUser }).select("_id guest");
+									assignUserData = await User.findOne({ _id: assignUser }).select("_id fullName email guest");
 								} else if (isValidEmail(assignUser)) {
 									assignUser = String(assignUser).toLowerCase();
-									assignUserData = await User.findOne({ email: assignUser }).select("_id guest");
+									assignUserData = await User.findOne({ email: assignUser }).select("_id fullName email guest");
 
 									if (!assignUserData) {
 										const guestUser = new User({
@@ -939,7 +940,16 @@ exports.updateCard = async (req, res, next) => {
 										},
 									]);
 
-								return res.json({ updatedCard: card });
+								res.json({ updatedCard: card });
+
+								if (assignUser) {
+									const dynamicTemplateData = {
+										name: assignUserData.fullName,
+										assignedBy: user.fullName,
+										taskName: card.name,
+									};
+									mailSendWithDynamicTemplate(assignUserData.email, process.env.TEMPLATE_ID_ASSIGN_TASK, dynamicTemplateData);
+								}
 							}
 						}
 					} else {
@@ -1844,6 +1854,21 @@ exports.createComment = async (req, res, next) => {
 							},
 						}
 					);
+
+					// notification send to mentioned users mail who is not online
+					const dt = new Date();
+					dt.setMinutes(dt.getMinutes() - 1);
+					const mentionedUsersData = await User.find({ $and: [{ _id: { $in: mentionedUsers } }, { $or: [{ socketId: { $ne: null } }, { lastOnline: { $lt: dt } }] }] }).select("_id fullName email");
+
+					const cardData = await Card.findOne({ _id: cardId }).select("name");
+					for (const each of mentionedUsersData) {
+						const dynamicTemplateData = {
+							name: each.fullName,
+							mentionedBy: user.fullName,
+							task: cardData.name,
+						};
+						mailSendWithDynamicTemplate(each.email, process.env.TEMPLATE_ID_MENTION_IN_TASK_COMMENT, dynamicTemplateData);
+					}
 				}
 			}
 		}

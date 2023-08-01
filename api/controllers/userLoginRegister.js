@@ -9,7 +9,7 @@ const UserSession = require("../../models/UserSession");
 
 const { isValidEmail, usernameGenerating, generatePassword, loginSessionCreate, sessionCreate } = require("../../utils/func");
 const { createToken, parseJWT } = require("../../utils/jwt");
-const { mailSend, verificationCodeMatch } = require("../../utils/mail");
+const { mailSendWithDynamicTemplate, verificationCodeMatch } = require("../../utils/mail");
 
 /**
  * Login an user
@@ -103,6 +103,13 @@ exports.login = async (req, res, next) => {
 					const saveUser = await userStructure.save();
 					isUserExists = saveUser;
 				}
+
+				if (!userExists || isUserExists.guest) {
+					const dynamicTemplateData = {
+						name: decodeData.fullName,
+					};
+					mailSendWithDynamicTemplate(decodeData.email, process.env.TEMPLATE_ID_WELCOME_MAIL, dynamicTemplateData);
+				}
 			}
 
 			const loginSession = await loginSessionCreate(isUserExists._id);
@@ -118,10 +125,12 @@ exports.login = async (req, res, next) => {
 				avatar: isUserExists.avatar,
 				lastOnline: isUserExists.lastOnline,
 			};
-			return res.json({ jwtToken, loggedUser });
+			res.json({ jwtToken, loggedUser });
 		}
 
-		return res.status(400).json({ issue });
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
 	} catch (err) {
 		next(err);
 	}
@@ -244,10 +253,11 @@ exports.register = async (req, res, next) => {
 
 			const getSession = await sessionCreate(userStructure._id, "email-verification", 6, 15);
 
-			const subject = "Email verification code.";
-			const message = `<span style="font-size:16px;">Please verify your email address, code: <span style="font-weight:bold;">${getSession.code}</span></span>`;
-
-			const codeSendResponse = await mailSend(email, subject, message);
+			const dynamicTemplateData = {
+				name: fullName,
+				code: getSession.code,
+			};
+			const codeSendResponse = await mailSendWithDynamicTemplate(email, process.env.TEMPLATE_ID_EMAIL_VERIFY, dynamicTemplateData);
 
 			if (codeSendResponse.status === 200) {
 				await userStructure.save();
@@ -257,13 +267,20 @@ exports.register = async (req, res, next) => {
 					expireDate: getSession.expireDate,
 				};
 
-				return res.status(201).json({ message: "Successfully registered!", userId: userStructure._id, session });
+				res.status(201).json({ message: "Successfully registered!", userId: userStructure._id, session });
+				const dynamicTemplateData = {
+					name: fullName,
+				};
+				await mailSendWithDynamicTemplate(email, process.env.TEMPLATE_ID_WELCOME_MAIL, dynamicTemplateData);
 			} else {
 				let m = codeSendResponse.status ? codeSendResponse : { message: codeSendResponse.message };
 				return res.status(codeSendResponse.status || 400).json({ issue: m });
 			}
 		}
-		return res.status(400).json({ issue });
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
 	} catch (err) {
 		next(err);
 	}
@@ -354,30 +371,31 @@ exports.resendVerificationCode = async (req, res, next) => {
 		if (email) {
 			email = String(email).replace(/\s+/g, "").trim().toLowerCase();
 			if (isValidEmail(email)) {
-				const user = await User.findOne({ email }).select("email emailVerified");
+				const user = await User.findOne({ email }).select("email fullName emailVerified");
 				if (user) {
 					if (!user.emailVerified) {
 						await UserSession.deleteMany({ $and: [{ user: user._id }, { sessionName: "email-verification" }] }); // Before create new session, delete old sessions
 
 						const getSession = await sessionCreate(user._id, "email-verification", 6, 15);
 
-						const subject = "Re-send email verification code.";
-						const message = `<span style="font-size:16px;">Please verify your email address, code: <span style="font-weight:bold;">${getSession.code}</span></span>`;
-
-						const codeSendResponse = await mailSend(user.email, subject, message);
+						const dynamicTemplateData = {
+							name: user.fullName,
+							code: getSession.code,
+						};
+						const codeSendResponse = await mailSendWithDynamicTemplate(user.email, process.env.TEMPLATE_ID_RESEND_VERIFY_CODE, dynamicTemplateData);
 						if (codeSendResponse.status === 200) {
 							const session = {
 								sessionUUID: getSession.sessionUUID,
 								expireDate: getSession.expireDate,
 							};
-							return res.json({
+							res.json({
 								message: "Successfully re-sent verification code!",
 								userId: user._id,
 								session,
 							});
 						} else {
 							let m = codeSendResponse.status ? codeSendResponse : { message: codeSendResponse.message };
-							return res.status(codeSendResponse.status || 400).json({ issue: m });
+							res.status(codeSendResponse.status || 400).json({ issue: m });
 						}
 					} else {
 						issue.message = "You are already verified, you don't need to send a code. Just login!";
@@ -392,7 +410,9 @@ exports.resendVerificationCode = async (req, res, next) => {
 			issue.message = "Please provide email";
 		}
 
-		return res.status(400).json({ issue });
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
 	} catch (err) {
 		next(err);
 	}
@@ -454,7 +474,7 @@ exports.recoverPassword = async (req, res, next) => {
 		let emailOrPhoneOk, isUserExists;
 		if (emailOrPhone) {
 			emailOrPhone = String(emailOrPhone).replace(/\s+/g, "").trim().toLowerCase();
-			isUserExists = await User.findOne({ $or: [{ email: emailOrPhone }, { phone: emailOrPhone }] }).select("email");
+			isUserExists = await User.findOne({ $or: [{ email: emailOrPhone }, { phone: emailOrPhone }] }).select("email fullName");
 			if (isUserExists) {
 				isUserExists.toObject();
 				emailOrPhoneOk = true;
@@ -469,24 +489,27 @@ exports.recoverPassword = async (req, res, next) => {
 			await UserSession.deleteMany({ $and: [{ user: isUserExists._id }, { sessionName: "password-recover" }] }); // Before create new session, delete old sessions
 			const getSession = await sessionCreate(isUserExists._id, "password-recover", 6, 15);
 
-			const subject = "Password recover code.";
-			const message = `<span style="font-size:16px;">Recently you have requested a code to recover your account, code: <span style="font-weight:bold;">${getSession.code}</span></span>`;
-
-			const codeSendResponse = await mailSend(isUserExists.email, subject, message);
+			const dynamicTemplateData = {
+				name: isUserExists.fullName,
+				code: getSession.code,
+			};
+			const codeSendResponse = await mailSendWithDynamicTemplate(isUserExists.email, process.env.TEMPLATE_ID_FORGET_PASSWORD, dynamicTemplateData);
 			if (codeSendResponse.status === 200) {
 				const session = {
 					sessionUUID: getSession.sessionUUID,
 					expireDate: getSession.expireDate,
 				};
 
-				return res.json({ message: "Code sent successfully to your email!", session });
+				res.json({ message: "Code sent successfully to your email!", session });
 			} else {
 				let m = codeSendResponse.status ? codeSendResponse : { message: codeSendResponse.message };
-				return res.status(codeSendResponse.status || 400).json({ issue: m });
+				res.status(codeSendResponse.status || 400).json({ issue: m });
 			}
 		}
 
-		return res.status(400).json({ issue });
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
 	} catch (err) {
 		next(err);
 	}
@@ -646,7 +669,7 @@ exports.resetPassword = async (req, res, next) => {
 					// Logout from others device
 					await UserSession.deleteMany({ $and: [{ user: userExist._id }, { sessionName: "UserLoginSession" }] });
 
-					return res.json({ message: "Password successfully recovered!" });
+					res.json({ message: "Password successfully recovered!" });
 				} else {
 					issue.message = "Failed to update password!";
 				}
@@ -655,7 +678,9 @@ exports.resetPassword = async (req, res, next) => {
 			}
 		}
 
-		return res.status(400).json({ issue });
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
 	} catch (err) {
 		next(err);
 	}

@@ -3,6 +3,7 @@ const Space = require("../../../models/Space");
 const SpaceChat = require("../../../models/SpaceChat");
 const { splitSpecificParts } = require("../../../utils/func");
 const { multipleFilesCheckAndUpload, upload } = require("../../../utils/file");
+const { mailSendWithDynamicTemplate } = require("../../../utils/mail");
 const User = require("../../../models/User");
 
 exports.sendMessage = async (req, res, next) => {
@@ -171,6 +172,23 @@ exports.sendMessage = async (req, res, next) => {
 					{ $push: { seenBy: user._id } }
 				).then();
 				// Operation End
+
+				if (mentionedUsers.length) {
+					// notification send to mentioned users mail who is not online
+					const dt = new Date();
+					dt.setMinutes(dt.getMinutes() - 1);
+					const mentionedUsersData = await User.find({ $and: [{ _id: { $in: mentionedUsers } }, { $or: [{ socketId: { $ne: null } }, { lastOnline: { $lt: dt } }] }] }).select("_id fullName email");
+
+					const spaceData = await Space.findOne({ _id: spaceId }).select("name");
+					for (const each of mentionedUsersData) {
+						const dynamicTemplateData = {
+							name: each.fullName,
+							mentionedBy: user.fullName,
+							squadName: spaceData.name,
+						};
+						mailSendWithDynamicTemplate(each.email, process.env.TEMPLATE_ID_MENTION_IN_CHAT, dynamicTemplateData);
+					}
+				}
 			}
 		}
 
