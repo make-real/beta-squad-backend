@@ -2,6 +2,7 @@
 
 const { v4: uuid } = require("uuid");
 const UserSession = require("../models/UserSession");
+const AdminSession = require("../models/AdminSession");
 
 function isValidEmail(email) {
 	const re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
@@ -10,19 +11,20 @@ function isValidEmail(email) {
 	return validEmail;
 }
 
-async function usernameGenerating(email, forbiddenUsernames) {
+async function usernameGenerating(email, model, forbiddenUsernames) {
 	const User = require("../models/User");
-	forbiddenUsernames = forbiddenUsernames || ["account", "accounts", "user", "users", "api"];
+	model = model || User;
+	forbiddenUsernames = forbiddenUsernames || ["account", "accounts", "user", "users", "admin", "admins", "api"];
 	const targetOfSlice = email.indexOf("@");
 	let username = email.slice(0, targetOfSlice);
-	let usernameExist = await User.findOne({ username });
+	let usernameExist = await model.findOne({ username });
 	let IsForbiddenUsernames = forbiddenUsernames.includes(username);
 
 	if (usernameExist || IsForbiddenUsernames) {
 		let increment = 1;
 		while (true) {
 			var u = username + increment;
-			usernameExist = await User.findOne({ username: u });
+			usernameExist = await model.findOne({ username: u });
 			IsForbiddenUsernames = forbiddenUsernames.includes(u);
 			console.trace("Looping at 'usernameGenerating' func to generate username");
 
@@ -94,7 +96,7 @@ function randomDigit(length) {
 	return result;
 }
 
-async function loginSessionCreate(userId, expireInDay) {
+async function userLoginSessionCreate(userId, expireInDay) {
 	expireInDay = expireInDay || 30;
 
 	const sessionUUID = uuid();
@@ -112,7 +114,7 @@ async function loginSessionCreate(userId, expireInDay) {
 	return session;
 }
 
-async function sessionCreate(userId, sessionName, length, expireInMinutes) {
+async function userSessionCreate(userId, sessionName, length, expireInMinutes) {
 	const getRandomDigit = randomDigit(length);
 
 	const expireDate = new Date();
@@ -128,4 +130,38 @@ async function sessionCreate(userId, sessionName, length, expireInMinutes) {
 	return session;
 }
 
-module.exports = { isValidEmail, usernameGenerating, splitSpecificParts, generatePassword, hexAColorGen, randomDigit, loginSessionCreate, sessionCreate };
+async function adminLoginSessionCreate(adminId, expireInDay) {
+	expireInDay = expireInDay || 30;
+
+	const sessionUUID = uuid();
+	const expireDate = new Date();
+	expireDate.setDate(expireDate.getDate() + expireInDay);
+
+	const sessionStructure = new AdminSession({
+		admin: adminId,
+		sessionName: "AdminLoginSession",
+		sessionUUID,
+		expireDate,
+	});
+
+	const session = await sessionStructure.save();
+	return session;
+}
+
+async function adminSessionCreate(adminId, sessionName, length, expireInMinutes) {
+	const getRandomDigit = randomDigit(length);
+
+	const expireDate = new Date();
+	expireDate.setMinutes(expireDate.getMinutes() + expireInMinutes);
+	const sessionStructure = new AdminSession({
+		admin: adminId,
+		sessionName,
+		sessionUUID: uuid(),
+		expireDate,
+		code: getRandomDigit,
+	});
+	const session = await sessionStructure.save();
+	return session;
+}
+
+module.exports = { isValidEmail, usernameGenerating, splitSpecificParts, generatePassword, hexAColorGen, randomDigit, userLoginSessionCreate, userSessionCreate, adminLoginSessionCreate, adminSessionCreate };

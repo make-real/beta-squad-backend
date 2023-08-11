@@ -7,7 +7,7 @@ const { verifyGoogleToken } = require("../../utils/firebase/auth");
 const User = require("../../models/User");
 const UserSession = require("../../models/UserSession");
 
-const { isValidEmail, usernameGenerating, generatePassword, loginSessionCreate, sessionCreate } = require("../../utils/func");
+const { isValidEmail, usernameGenerating, generatePassword, userLoginSessionCreate, userSessionCreate } = require("../../utils/func");
 const { createToken, parseJWT } = require("../../utils/jwt");
 const { mailSendWithDynamicTemplate, verificationCodeMatch } = require("../../utils/mail");
 
@@ -112,7 +112,7 @@ exports.login = async (req, res, next) => {
 				}
 			}
 
-			const loginSession = await loginSessionCreate(isUserExists._id);
+			const loginSession = await userLoginSessionCreate(isUserExists._id);
 
 			const jwtToken = createToken(loginSession._id, loginSession.sessionUUID);
 			const loggedUser = {
@@ -251,7 +251,7 @@ exports.register = async (req, res, next) => {
 				});
 			}
 
-			const getSession = await sessionCreate(userStructure._id, "email-verification", 6, 15);
+			const getSession = await userSessionCreate(userStructure._id, "email-verification", 6, 15);
 
 			const dynamicTemplateData = {
 				name: fullName,
@@ -340,7 +340,7 @@ exports.accountVerification = async (req, res, next) => {
 						if (update.modifiedCount) {
 							await UserSession.deleteOne({ _id: session._id }); // Now delete the session
 
-							const loginSession = await loginSessionCreate(userExist._id);
+							const loginSession = await userLoginSessionCreate(userExist._id);
 
 							const jwtToken = createToken(loginSession._id, loginSession.sessionUUID);
 							return res.json({ message: "Your email is successfully verified!", jwtToken, loggedUser: userExist._id });
@@ -376,7 +376,7 @@ exports.resendVerificationCode = async (req, res, next) => {
 					if (!user.emailVerified) {
 						await UserSession.deleteMany({ $and: [{ user: user._id }, { sessionName: "email-verification" }] }); // Before create new session, delete old sessions
 
-						const getSession = await sessionCreate(user._id, "email-verification", 6, 15);
+						const getSession = await userSessionCreate(user._id, "email-verification", 6, 15);
 
 						const dynamicTemplateData = {
 							name: user.fullName,
@@ -487,7 +487,7 @@ exports.recoverPassword = async (req, res, next) => {
 
 		if (emailOrPhoneOk) {
 			await UserSession.deleteMany({ $and: [{ user: isUserExists._id }, { sessionName: "password-recover" }] }); // Before create new session, delete old sessions
-			const getSession = await sessionCreate(isUserExists._id, "password-recover", 6, 15);
+			const getSession = await userSessionCreate(isUserExists._id, "password-recover", 6, 15);
 
 			const dynamicTemplateData = {
 				name: isUserExists.fullName,

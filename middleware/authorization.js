@@ -1,6 +1,7 @@
 const { isValidObjectId } = require("mongoose");
 const UserSession = require("../models/UserSession");
 const User = require("../models/User");
+const AdminSession = require("../models/AdminSession");
 const { parseJWT } = require("../utils/jwt");
 
 exports.userAuthorization = async (req, res, next) => {
@@ -39,6 +40,56 @@ exports.userAuthorization = async (req, res, next) => {
 								}
 							} else {
 								issue.message = "User doesn't exist!";
+							}
+						} else {
+							issue.message = "Session expired!";
+						}
+					} else {
+						issue.message = "Invalid token!";
+					}
+				} else {
+					issue.message = "Invalid token";
+				}
+			} else {
+				issue.message = jwt_payload.error;
+			}
+		} else {
+			issue.message = "Please provide token in - headers.authorization";
+		}
+
+		if (req.socketAuthToken) {
+			console.log(`Socket: ${issue.message}`);
+			return next(new Error("invalid"));
+		}
+		return res?.status(401)?.json({ issue });
+	} catch (err) {
+		next(err);
+	}
+};
+
+exports.adminAuthorization = async (req, res, next) => {
+	try {
+		const issue = {};
+		let token = req.socketAuthToken ? `Bearer ${req.socketAuthToken}` : req.headers.authorization;
+		if (token) {
+			token = token.split(" ")[1];
+			const jwt_payload = parseJWT(token);
+
+			if (!jwt_payload.error) {
+				if (jwt_payload.sessionId && isValidObjectId(jwt_payload.sessionId)) {
+					const loginSession = await AdminSession.findOne({
+						$and: [{ _id: jwt_payload.sessionId }, { sessionUUID: jwt_payload.sessionUUID }, { sessionName: "AdminLoginSession" }],
+					}).populate("admin");
+
+					if (loginSession) {
+						if (loginSession.expireDate > new Date()) {
+							const admin = loginSession.admin;
+							if (admin) {
+								req.admin = admin;
+								next();
+								return;
+							} else {
+								issue.message = "Admin doesn't exist!";
 							}
 						} else {
 							issue.message = "Session expired!";
