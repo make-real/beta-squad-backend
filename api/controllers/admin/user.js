@@ -1,3 +1,4 @@
+const { isValidObjectId } = require("mongoose");
 const User = require("../../../models/User");
 const Workspace = require("../../../models/Workspace");
 const Space = require("../../../models/Space");
@@ -66,6 +67,57 @@ exports.getUsersList = async (req, res, next) => {
 		const userCount = await User.countDocuments({});
 
 		return res.json({ users: getUsers, userCount });
+	} catch (err) {
+		next(err);
+	}
+};
+
+exports.getSingleUser = async (req, res, next) => {
+	const { userId } = req.params;
+	try {
+		const issue = {};
+
+		if (isValidObjectId(userId)) {
+			let getUser = await User.findOne({ _id: userId }).select("fullName username email avatar");
+			getUser = JSON.parse(JSON.stringify(getUser));
+
+			const workspaces = await Workspace.aggregate([
+				{
+					$match: {
+						teamMembers: {
+							$elemMatch: {
+								member: Types.ObjectId(getUser._id),
+								role: "owner",
+							},
+						},
+					},
+				},
+				{
+					$project: {
+						_id: 1,
+						totalTeamMembers: { $size: "$teamMembers" },
+					},
+				},
+			]);
+
+			getUser.workspacesCount = workspaces.length;
+
+			let totalTeamMembers = 0;
+			let workspaceIds = [];
+			for (const workspace of workspaces) {
+				totalTeamMembers = totalTeamMembers + (workspace?.totalTeamMembers || 0);
+				workspaceIds.push(workspace._id);
+			}
+
+			getUser.teamMembers = totalTeamMembers;
+			getUser.spaceCount = await Space.countDocuments({ workSpaceRef: { $in: workspaceIds } });
+
+			return res.json({ user: getUser });
+		} else {
+			issue.userId = "Invalid user Id!";
+		}
+
+		res.status(400).json({ issue });
 	} catch (err) {
 		next(err);
 	}
