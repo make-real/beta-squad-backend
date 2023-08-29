@@ -293,7 +293,7 @@ exports.deleteAccount = async (req, res, next) => {
 			await Checklist.deleteMany({ spaceRef: space._id });
 			await CommentChat.deleteMany({ spaceRef: space._id });
 		}
-		await Space.deleteOne({ members: { $elemMatch: { member: user._id, role: "manager" } } });
+		await Space.deleteMany({ members: { $elemMatch: { member: user._id, role: "manager" } } });
 		await Space.updateMany(
 			{ members: { $elemMatch: { member: user._id, role: "member" } } },
 			{
