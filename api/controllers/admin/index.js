@@ -30,7 +30,7 @@ exports.getAdminList = async (req, res, next) => {
 			query = { $or: [{ name: KeyWordRegExp }, { username: KeyWordRegExp }, { email: KeyWordRegExp }] };
 		}
 
-		const getAdmins = await Admin.find(query).select("name username email avatar role").sort({ createdAt: -1 }).skip(skip).limit(limit);
+		const getAdmins = await Admin.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit);
 		return res.json({ admins: getAdmins });
 	} catch (err) {
 		next(err);
@@ -240,7 +240,7 @@ exports.getSingleAdminData = async (req, res, next) => {
 		const issue = {};
 
 		if (isValidObjectId(adminId)) {
-			let getAdmin = await Admin.findOne({ _id: adminId }).select("name username email avatar role");
+			let getAdmin = await Admin.findOne({ _id: adminId });
 			return res.json({ admin: getAdmin });
 		} else {
 			issue.userId = "Invalid obj Id!";

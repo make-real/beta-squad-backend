@@ -34,7 +34,7 @@ exports.getUsersList = async (req, res, next) => {
 			query = { $or: [{ fullName: KeyWordRegExp }, { email: KeyWordRegExp }] };
 		}
 
-		let getUsers = await User.find(query).select("fullName username email avatar").sort({ createdAt: -1 }).skip(skip).limit(limit);
+		let getUsers = await User.find(query).select("fullName username email avatar createdAt").sort({ createdAt: -1 }).skip(skip).limit(limit);
 		getUsers = JSON.parse(JSON.stringify(getUsers));
 
 		for (const user of getUsers) {
@@ -84,7 +84,7 @@ exports.getSingleUser = async (req, res, next) => {
 		const issue = {};
 
 		if (isValidObjectId(userId)) {
-			let getUser = await User.findOne({ _id: userId }).select("fullName username email avatar");
+			let getUser = await User.findOne({ _id: userId }).select("fullName username email avatar createdAt");
 			getUser = JSON.parse(JSON.stringify(getUser));
 
 			const workspaces = await Workspace.aggregate([
