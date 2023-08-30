@@ -24,6 +24,11 @@ const adminSchema = new Schema(
 		avatar: {
 			type: String,
 		},
+		role: {
+			type: String,
+			enum: ["admin", "moderator"],
+			default: "admin",
+		},
 	},
 	{
 		timestamps: true,
