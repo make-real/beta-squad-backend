@@ -1,31 +1,19 @@
 const defaultTags = [
 	{
-		name: "Addons",
+		name: "Task",
 		color: "#fbcb53",
 	},
 	{
-		name: "Collaboration",
+		name: "Bug",
 		color: "#ff8900",
 	},
 	{
-		name: "Calendar",
+		name: "Live issue",
 		color: "#ff693b",
 	},
 	{
-		name: "Easy",
+		name: "Low priority",
 		color: "#47c6d8",
-	},
-	{
-		name: "Important",
-		color: "#7fc241",
-	},
-	{
-		name: "Improvement",
-		color: "#47b9ea",
-	},
-	{
-		name: "New Feature",
-		color: "#47b9ea",
 	},
 ];
 

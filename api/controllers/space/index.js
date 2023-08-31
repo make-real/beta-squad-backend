@@ -748,7 +748,7 @@ exports.getMembers = async (req, res, next) => {
 								path: "members",
 								populate: {
 									path: "member",
-									select: "fullName username avatar",
+									select: "fullName username email avatar",
 								},
 							});
 

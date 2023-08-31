@@ -578,7 +578,7 @@ exports.teamMembers = async (req, res, next) => {
 						.select("teamMembers")
 						.populate({
 							path: "teamMembers.member",
-							select: "fullName username avatar",
+							select: "fullName username email avatar",
 						});
 					if (getWorkspace) {
 						let teamMembers = getWorkspace.teamMembers;

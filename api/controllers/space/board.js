@@ -403,10 +403,11 @@ CARD
 */
 exports.createCard = async (req, res, next) => {
 	let { spaceId, listId } = req.params;
-	let { name } = req.body;
+	let { name, tagId } = req.body;
 	try {
 		const user = req.user;
 		const issue = {};
+		let tagIdOk;
 
 		if (name) {
 			name = String(name)
@@ -420,43 +421,63 @@ exports.createCard = async (req, res, next) => {
 			if (isValidSpaceId && isValidListId) {
 				const existsList = await List.findOne({ _id: listId }).select("spaceRef");
 				if (existsList) {
-					const existsSpace = await Space.exists({ _id: existsList.spaceRef });
+					const existsSpace = await Space.findOne({ _id: existsList.spaceRef }).select("workSpaceRef");
+
 					if (existsSpace) {
-						const doIHaveAccess = await Space.exists({ $and: [{ _id: existsList.spaceRef }, { "members.member": user._id }] });
-						if (doIHaveAccess) {
-							const isDuplicate = await Card.exists({ $and: [{ listRef: listId }, { name: new RegExp(`^${name}$`, "i") }] });
-							if (!isDuplicate) {
-								// generate order number
-								let orderNumber;
-								const existsCard = await Card.exists({ $and: [{ listRef: listId }, { order: 1 }] });
-								if (existsCard) {
-									const highest = await Card.findOne({ listRef: listId }).sort({ order: -1 }).select("order");
-									orderNumber = highest.order + 1;
+						// check tagId
+						if (tagId) {
+							if (isValidObjectId(tagId)) {
+								const tagExists = await Tag.exists({ $and: [{ _id: tagId }, { workSpaceRef: existsSpace.workSpaceRef }] });
+								if (tagExists) {
+									tagIdOk = true;
 								} else {
-									orderNumber = 1;
+									issue.tagId = "Tag not found!!";
 								}
-
-								const cardStructure = new Card({
-									name,
-									spaceRef: existsList.spaceRef,
-									listRef: listId,
-									creator: user._id,
-									order: orderNumber,
-									color: hexAColorGen(),
-								});
-								const createCard = await cardStructure.save();
-
-								createCard.creator = undefined;
-								createCard.tags = undefined;
-								createCard.attachments = undefined;
-								createCard.assignee = undefined;
-								createCard.progress = undefined;
-								res.status(201).json({ card: createCard });
 							} else {
-								issue.message = "Couldn't create a card with duplicate name in the same list!";
+								issue.tagId = "Invalid tag id!";
 							}
 						} else {
-							issue.message = "You have no access to this space!";
+							tagId = undefined;
+							tagIdOk = true;
+						}
+
+						if (tagIdOk) {
+							const doIHaveAccess = await Space.exists({ $and: [{ _id: existsList.spaceRef }, { "members.member": user._id }] });
+							if (doIHaveAccess) {
+								const isDuplicate = await Card.exists({ $and: [{ listRef: listId }, { name: new RegExp(`^${name}$`, "i") }] });
+								if (!isDuplicate) {
+									// generate order number
+									let orderNumber;
+									const existsCard = await Card.exists({ $and: [{ listRef: listId }, { order: 1 }] });
+									if (existsCard) {
+										const highest = await Card.findOne({ listRef: listId }).sort({ order: -1 }).select("order");
+										orderNumber = highest.order + 1;
+									} else {
+										orderNumber = 1;
+									}
+
+									const cardStructure = new Card({
+										name,
+										spaceRef: existsList.spaceRef,
+										listRef: listId,
+										creator: user._id,
+										order: orderNumber,
+										color: hexAColorGen(),
+										tags: tagId,
+									});
+									const createCard = await cardStructure.save();
+
+									createCard.creator = undefined;
+									createCard.attachments = undefined;
+									createCard.assignee = undefined;
+									createCard.progress = undefined;
+									res.status(201).json({ card: createCard });
+								} else {
+									issue.message = "Couldn't create a card with duplicate name in the same list!";
+								}
+							} else {
+								issue.message = "You have no access to this space!";
+							}
 						}
 					} else {
 						issue.message = "Not found space!";
