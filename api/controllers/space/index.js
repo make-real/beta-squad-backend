@@ -1,5 +1,5 @@
 const { isValidObjectId } = require("mongoose");
-
+const { defaultBoards } = require("../../../config/centralVariables");
 const Workspace = require("../../../models/Workspace");
 const Space = require("../../../models/Space");
 const User = require("../../../models/User");
@@ -112,10 +112,30 @@ exports.createSpace = async (req, res, next) => {
 			const saveSpace = await spaceStructure.save();
 			saveSpace.members = undefined;
 
-			return res.status(201).json({ space: saveSpace });
+			res.status(201).json({ space: saveSpace });
+
+			// initial or default Board create
+			const boardStructures = [];
+			let orderNumber = 1;
+			for (const board of defaultBoards) {
+				if (board) {
+					boardStructures.push({
+						name: board,
+						spaceRef: saveSpace._id,
+						creator: user._id,
+						order: orderNumber,
+					});
+					orderNumber++;
+				}
+			}
+			if (boardStructures.length) {
+				await List.create(boardStructures);
+			}
 		}
 
-		return res.status(400).json({ issue });
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
 	} catch (err) {
 		next(err);
 	}

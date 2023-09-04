@@ -2,7 +2,7 @@ const { isValidObjectId } = require("mongoose");
 const { imageCheck, upload } = require("../../utils/file");
 const { isValidEmail, usernameGenerating } = require("../../utils/func");
 const { mailSendWithDynamicTemplate } = require("../../utils/mail");
-const { defaultTags } = require("../../config/centralVariables");
+const { defaultTags, defaultBoards } = require("../../config/centralVariables");
 const User = require("../../models/User");
 const Workspace = require("../../models/Workspace");
 const WorkspaceSetting = require("../../models/WorkspaceSetting");
@@ -121,6 +121,24 @@ exports.createWorkspace = async (req, res, next) => {
 
 				const initialSpace = await spaceStructure.save();
 				workspace.initialSpaceId = initialSpace._id;
+
+				// initial or default Board create
+				const boardStructures = [];
+				let orderNumber = 1;
+				for (const board of defaultBoards) {
+					if (board) {
+						boardStructures.push({
+							name: board,
+							spaceRef: initialSpace._id,
+							creator: user._id,
+							order: orderNumber,
+						});
+						orderNumber++;
+					}
+				}
+				if (boardStructures.length) {
+					await List.create(boardStructures);
+				}
 
 				// initial or default Tags create
 				const arr = [];
