@@ -8,7 +8,7 @@ const Checklist = require("../../../models/Checklist");
 const CommentChat = require("../../../models/CommentChat");
 const Tag = require("../../../models/Tag");
 const { multipleFilesCheckAndUpload } = require("../../../utils/file");
-const { isValidEmail, usernameGenerating, splitSpecificParts, hexAColorGen } = require("../../../utils/func");
+const { isValidEmail, usernameGenerating, splitSpecificParts, hexAColorGen, cardKeyGen } = require("../../../utils/func");
 const { mailSendWithDynamicTemplate } = require("../../../utils/mail");
 
 exports.createList = async (req, res, next) => {
@@ -167,6 +167,7 @@ exports.getLists = async (req, res, next) => {
 											spaceRef: 1,
 											listRef: 1,
 											color: 1,
+											cardKey: 1,
 											commentsCount: { $size: "$commentchats" },
 											attachmentsCount: { $size: "$attachments" },
 											seen: {
@@ -529,6 +530,7 @@ exports.createCard = async (req, res, next) => {
 										order: orderNumber,
 										color: hexAColorGen(),
 										tags: tagId,
+										cardKey: await cardKeyGen(existsList.spaceRef),
 									});
 									const createCard = await cardStructure.save();
 
@@ -649,6 +651,7 @@ exports.getCards = async (req, res, next) => {
 									spaceRef: 1,
 									listRef: 1,
 									color: 1,
+									cardKey: 1,
 									commentsCount: { $size: "$commentchats" },
 									attachmentsCount: { $size: "$attachments" },
 									seen: {
@@ -759,6 +762,7 @@ exports.getSingleCard = async (req, res, next) => {
 									color: 1,
 									seenBy: 1,
 									attachments: 1,
+									cardKey: 1,
 									commentsCount: { $size: "$commentchats" },
 									attachmentsCount: { $size: "$attachments" },
 								},

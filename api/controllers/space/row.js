@@ -117,6 +117,7 @@ exports.getCardsAsRows = async (req, res, next) => {
 								spaceRef: 1,
 								listRef: 1,
 								color: 1,
+								cardKey: 1,
 								commentsCount: { $size: "$commentchats" },
 								attachmentsCount: { $size: "$attachments" },
 								seen: {

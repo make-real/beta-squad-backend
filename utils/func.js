@@ -164,4 +164,29 @@ async function adminSessionCreate(adminId, sessionName, length, expireInMinutes)
 	return session;
 }
 
-module.exports = { isValidEmail, usernameGenerating, splitSpecificParts, generatePassword, hexAColorGen, randomDigit, userLoginSessionCreate, userSessionCreate, adminLoginSessionCreate, adminSessionCreate };
+const cardKeyGen = async (spaceId) => {
+	const Space = require("../models/Space");
+	const Card = require("../models/Card");
+	const space = await Space.findOne({ _id: spaceId }).select("name");
+	let spaceName = space.name;
+	spaceName = spaceName.replace(/[^\p{L}\s]+/gu, "").replace(/\s+/g, "");
+
+	let cardKey = spaceName.slice(0, 3).toUpperCase();
+	if (cardKey.length < 3) {
+		if (cardKey.length === 2) {
+			cardKey = `${cardKey}A`;
+		} else if (cardKey.length === 1) {
+			cardKey = `${cardKey}AB`;
+		}
+	}
+	cardKey = `${cardKey}-`;
+
+	const highest = await Card.findOne({ spaceRef: spaceId }).sort({ createdAt: -1 }).select("cardKey");
+	let num = highest?.cardKey?.slice(4, highest.cardKey.length) || 0;
+	num = parseInt(num, 10);
+	cardKey = `${cardKey}${num + 1}`;
+
+	return cardKey;
+};
+
+module.exports = { isValidEmail, usernameGenerating, splitSpecificParts, generatePassword, hexAColorGen, randomDigit, userLoginSessionCreate, userSessionCreate, adminLoginSessionCreate, adminSessionCreate, cardKeyGen };

@@ -37,6 +37,10 @@ const cardSchema = new Schema(
 			type: String,
 			required: true,
 		},
+		cardKey: {
+			type: String,
+			required: true,
+		},
 		assignee: {
 			type: [
 				{
