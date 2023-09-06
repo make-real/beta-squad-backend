@@ -1,4 +1,4 @@
-const { isValidObjectId } = require("mongoose");
+const { isValidObjectId, Types } = require("mongoose");
 const User = require("../../../models/User");
 const Space = require("../../../models/Space");
 const Workspace = require("../../../models/Workspace");
@@ -90,35 +90,100 @@ exports.getLists = async (req, res, next) => {
 			if (existsSpace) {
 				const doIHaveAccess = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
 				if (doIHaveAccess) {
-					let getLists = await List.find({ spaceRef: spaceId }).sort({ order: 1 }).select("name order").skip(skip).limit(limit);
+					const pipeline = [
+						{ $match: { spaceRef: Types.ObjectId(spaceId) } },
+						{
+							$skip: skip,
+						},
+						{
+							$limit: limit,
+						},
+						{
+							$project: {
+								name: 1,
+								order: 1,
+							},
+						},
+					];
+
 					if (getCards) {
-						getLists = JSON.parse(JSON.stringify(getLists));
-						for (const list of getLists) {
-							let cards = await Card.find({ listRef: list._id })
-								.sort({ order: 1 })
-								.select("name progress description tags startDate endDate order spaceRef listRef color seenBy")
-								.populate([
+						pipeline.push({
+							$lookup: {
+								from: "cards",
+								localField: "_id",
+								foreignField: "listRef",
+								as: "cards",
+								pipeline: [
 									{
-										path: "tags",
-										select: "name color",
+										$sort: { order: 1 },
 									},
 									{
-										path: "checkList",
-										select: "content checked spaceRef cardRef",
+										$lookup: {
+											from: "tags",
+											localField: "tags",
+											foreignField: "_id",
+											as: "tags",
+											pipeline: [{ $project: { name: 1, color: 1 } }],
+										},
 									},
 									{
-										path: "assignee",
-										select: "fullName username avatar",
+										$lookup: {
+											from: "checklists",
+											localField: "checkList",
+											foreignField: "_id",
+											as: "checkList",
+											pipeline: [{ $project: { content: 1, checked: 1, spaceRef: 1, cardRef: 1 } }],
+										},
 									},
-								]);
-							cards = JSON.parse(JSON.stringify(cards));
-							for (const card of cards) {
-								card.seen = card.seenBy.includes(String(user._id));
-								delete card.seenBy;
-							}
-							list.cards = cards;
-						}
+									{
+										$lookup: {
+											from: "users",
+											localField: "assignee",
+											foreignField: "_id",
+											as: "assignee",
+											pipeline: [{ $project: { fullName: 1, username: 1, avatar: 1 } }],
+										},
+									},
+									{
+										$lookup: {
+											from: "commentchats",
+											localField: "_id",
+											foreignField: "to",
+											as: "commentchats",
+											pipeline: [{ $project: { _id: 1 } }],
+										},
+									},
+									{
+										$project: {
+											name: 1,
+											progress: 1,
+											description: 1,
+											tags: 1,
+											checkList: 1,
+											assignee: 1,
+											startDate: 1,
+											endDate: 1,
+											order: 1,
+											spaceRef: 1,
+											listRef: 1,
+											color: 1,
+											commentsCount: { $size: "$commentchats" },
+											attachmentsCount: { $size: "$attachments" },
+											seen: {
+												$cond: {
+													if: { $in: [user._id, "$seenBy"] },
+													then: true,
+													else: false,
+												},
+											},
+										},
+									},
+								],
+							},
+						});
 					}
+
+					let getLists = await List.aggregate(pipeline);
 
 					res.json({ lists: getLists });
 				} else {
@@ -508,7 +573,7 @@ exports.getCards = async (req, res, next) => {
 	let { spaceId, listId } = req.params;
 	let { skip, limit } = req.query;
 	try {
-		limit = parseInt(limit) || undefined;
+		limit = parseInt(limit) || 10;
 		skip = parseInt(skip) || 0;
 
 		const user = req.user;
@@ -523,31 +588,79 @@ exports.getCards = async (req, res, next) => {
 				if (existsSpace) {
 					const doIHaveAccess = await Space.exists({ $and: [{ _id: existsList.spaceRef }, { "members.member": user._id }] });
 					if (doIHaveAccess) {
-						let getCards = await Card.find({ listRef: listId })
-							.sort({ order: 1 })
-							.select("name progress description tags startDate endDate order spaceRef listRef color seenBy")
-							.populate([
-								{
-									path: "tags",
-									select: "name color",
+						let getCards = await Card.aggregate([
+							{ $match: { listRef: Types.ObjectId(listId) } },
+							{
+								$sort: { order: 1 },
+							},
+							{
+								$skip: skip,
+							},
+							{
+								$limit: limit,
+							},
+							{
+								$lookup: {
+									from: "tags",
+									localField: "tags",
+									foreignField: "_id",
+									as: "tags",
+									pipeline: [{ $project: { name: 1, color: 1 } }],
 								},
-								{
-									path: "checkList",
-									select: "content checked spaceRef cardRef",
+							},
+							{
+								$lookup: {
+									from: "checklists",
+									localField: "checkList",
+									foreignField: "_id",
+									as: "checkList",
+									pipeline: [{ $project: { content: 1, checked: 1, spaceRef: 1, cardRef: 1 } }],
 								},
-								{
-									path: "assignee",
-									select: "fullName username avatar",
+							},
+							{
+								$lookup: {
+									from: "users",
+									localField: "assignee",
+									foreignField: "_id",
+									as: "assignee",
+									pipeline: [{ $project: { fullName: 1, username: 1, avatar: 1 } }],
 								},
-							])
-							.skip(skip)
-							.limit(limit);
-						getCards = JSON.parse(JSON.stringify(getCards));
-
-						for (const card of getCards) {
-							card.seen = card.seenBy.includes(String(user._id));
-							delete card.seenBy;
-						}
+							},
+							{
+								$lookup: {
+									from: "commentchats",
+									localField: "_id",
+									foreignField: "to",
+									as: "commentchats",
+									pipeline: [{ $project: { _id: 1 } }],
+								},
+							},
+							{
+								$project: {
+									name: 1,
+									progress: 1,
+									description: 1,
+									tags: 1,
+									checkList: 1,
+									assignee: 1,
+									startDate: 1,
+									endDate: 1,
+									order: 1,
+									spaceRef: 1,
+									listRef: 1,
+									color: 1,
+									commentsCount: { $size: "$commentchats" },
+									attachmentsCount: { $size: "$attachments" },
+									seen: {
+										$cond: {
+											if: { $in: [user._id, "$seenBy"] },
+											then: true,
+											else: false,
+										},
+									},
+								},
+							},
+						]);
 
 						return res.json({ cards: getCards });
 					} else {
@@ -592,22 +705,65 @@ exports.getSingleCard = async (req, res, next) => {
 				if (existsSpace) {
 					const doIHaveAccess = await Space.exists({ $and: [{ _id: cardExists.spaceRef }, { "members.member": user._id }] });
 					if (doIHaveAccess) {
-						const getCard = await Card.findOne({ _id: cardId })
-							.select("-createdAt -updatedAt -creator")
-							.populate([
-								{
-									path: "tags",
-									select: "name color",
+						let getCard = await Card.aggregate([
+							{ $match: { _id: Types.ObjectId(cardId) } },
+							{
+								$lookup: {
+									from: "tags",
+									localField: "tags",
+									foreignField: "_id",
+									as: "tags",
+									pipeline: [{ $project: { name: 1, color: 1 } }],
 								},
-								{
-									path: "checkList",
-									select: "content checked spaceRef cardRef assignee",
+							},
+							{
+								$lookup: {
+									from: "checklists",
+									localField: "checkList",
+									foreignField: "_id",
+									as: "checkList",
+									pipeline: [{ $project: { content: 1, checked: 1, spaceRef: 1, cardRef: 1, assignee: 1 } }],
 								},
-								{
-									path: "assignee",
-									select: "fullName username avatar",
+							},
+							{
+								$lookup: {
+									from: "users",
+									localField: "assignee",
+									foreignField: "_id",
+									as: "assignee",
+									pipeline: [{ $project: { fullName: 1, username: 1, avatar: 1 } }],
 								},
-							]);
+							},
+							{
+								$lookup: {
+									from: "commentchats",
+									localField: "_id",
+									foreignField: "to",
+									as: "commentchats",
+									pipeline: [{ $project: { _id: 1 } }],
+								},
+							},
+							{
+								$project: {
+									name: 1,
+									progress: 1,
+									description: 1,
+									tags: 1,
+									checkList: 1,
+									assignee: 1,
+									startDate: 1,
+									endDate: 1,
+									order: 1,
+									spaceRef: 1,
+									listRef: 1,
+									color: 1,
+									seenBy: 1,
+									attachments: 1,
+									commentsCount: { $size: "$commentchats" },
+									attachmentsCount: { $size: "$attachments" },
+								},
+							},
+						]);
 
 						// Mark as seen this card for this user
 						Card.exists({ $and: [{ _id: cardId }, { seenBy: user._id }] }).then((data) => {
@@ -616,7 +772,7 @@ exports.getSingleCard = async (req, res, next) => {
 							}
 						});
 
-						return res.json({ card: getCard });
+						return res.json({ card: getCard[0] });
 					} else {
 						issue.spaceId = "You have no access to this space!";
 					}
