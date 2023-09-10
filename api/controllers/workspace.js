@@ -443,7 +443,7 @@ exports.deleteWorkspace = async (req, res, next) => {
  */
 exports.addTeamMembers = async (req, res, next) => {
 	let { workspaceId } = req.params;
-	let { userEmail, guest } = req.body;
+	let { userEmail, designation, guest } = req.body;
 
 	try {
 		const user = req.user;
@@ -490,6 +490,7 @@ exports.addTeamMembers = async (req, res, next) => {
 											$push: {
 												teamMembers: {
 													member: userExists._id,
+													designation: designation || undefined,
 												},
 											},
 										}
@@ -607,6 +608,7 @@ exports.teamMembers = async (req, res, next) => {
 								members.push({
 									...singleItem.member,
 									role: singleItem.role,
+									designation: singleItem.designation,
 								});
 							}
 						}
@@ -632,6 +634,125 @@ exports.teamMembers = async (req, res, next) => {
 };
 
 /**
+ * Team member data update in Workspace
+ *
+ * @param {express.Request} req Express request object
+ * @param {express.Response} res Express response object
+ * @param {() => } next Express callback
+ */
+exports.teamMemberDataUpdateInWorkspace = async (req, res, next) => {
+	let { workspaceId } = req.params;
+	let { memberId } = req.params;
+	let { designation } = req.body;
+
+	try {
+		const user = req.user;
+		const issue = {};
+
+		if (workspaceId) {
+			if (isValidObjectId(workspaceId)) {
+				if (designation) {
+					const workspaceExists = await Workspace.exists({ _id: workspaceId });
+					if (workspaceExists) {
+						const doIHaveAccess = await Workspace.exists({
+							$and: [
+								{ _id: workspaceId },
+								{
+									teamMembers: {
+										$elemMatch: {
+											$or: [
+												{ member: user._id, role: "owner" },
+												{ member: user._id, role: "admin" },
+											],
+										},
+									},
+								},
+							],
+						});
+						if (doIHaveAccess) {
+							if (memberId && isValidObjectId(memberId)) {
+								const userExists = await User.findOne({ _id: memberId }).select("_id");
+								if (userExists) {
+									const existsInWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": userExists._id }] });
+									if (existsInWorkspace) {
+										const iAmOwnerInTheWorkSpace = await Workspace.exists({
+											$and: [
+												{ _id: workspaceId },
+												{
+													teamMembers: {
+														$elemMatch: {
+															member: user._id,
+															role: "owner",
+														},
+													},
+												},
+											],
+										});
+
+										const memberOwnerInTheWorkSpace = await Workspace.exists({
+											$and: [
+												{ _id: workspaceId },
+												{
+													teamMembers: {
+														$elemMatch: {
+															member: memberId,
+															role: "owner",
+														},
+													},
+												},
+											],
+										});
+
+										if (iAmOwnerInTheWorkSpace || (!iAmOwnerInTheWorkSpace && !memberOwnerInTheWorkSpace)) {
+											await Workspace.updateOne(
+												{
+													$and: [{ _id: workspaceId }, { "teamMembers.member": memberId }],
+												},
+												{ $set: { "teamMembers.$.designation": designation } }
+											);
+
+											return res.json({ message: `Successfully updated designation of the member` });
+										} else {
+											if (!iAmOwnerInTheWorkSpace && memberOwnerInTheWorkSpace) {
+												issue.message = "You can take action to the owner!";
+											}
+										}
+									} else {
+										issue.message = "The user is not exists in the workspace!";
+									}
+								} else {
+									issue.message = "Not found user!";
+								}
+							} else {
+								if (!memberId) {
+									issue.message = "Please provide member id!";
+								} else {
+									issue.message = "Provided member is invalid!";
+								}
+							}
+						} else {
+							issue.message = "You have no access to perform the operation!";
+						}
+					} else {
+						issue.message = "Workspace not found";
+					}
+				} else {
+					issue.designation = "Please provide designation!";
+				}
+			} else {
+				issue.message = "Invalid workspace id!";
+			}
+		} else {
+			issue.message = "Please provide workspace id!";
+		}
+
+		return res.status(400).json({ issue });
+	} catch (err) {
+		next(err);
+	}
+}; /**
+
+
  * Role Change and remove members of a workspace
  *
  * @param {express.Request} req Express request object

@@ -21,6 +21,9 @@ const workspaceSchema = new Schema(
 						default: "user",
 						required: true,
 					},
+					designation: {
+						type: String,
+					},
 				},
 			],
 			select: false,
