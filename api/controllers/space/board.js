@@ -168,6 +168,8 @@ exports.getLists = async (req, res, next) => {
 											listRef: 1,
 											color: 1,
 											cardKey: 1,
+											createdAt: 1,
+											updatedAt: 1,
 											commentsCount: { $size: "$commentchats" },
 											attachmentsCount: { $size: "$attachments" },
 											seen: {
@@ -652,6 +654,8 @@ exports.getCards = async (req, res, next) => {
 									listRef: 1,
 									color: 1,
 									cardKey: 1,
+									createdAt: 1,
+									updatedAt: 1,
 									commentsCount: { $size: "$commentchats" },
 									attachmentsCount: { $size: "$attachments" },
 									seen: {
@@ -763,6 +767,8 @@ exports.getSingleCard = async (req, res, next) => {
 									seenBy: 1,
 									attachments: 1,
 									cardKey: 1,
+									createdAt: 1,
+									updatedAt: 1,
 									commentsCount: { $size: "$commentchats" },
 									attachmentsCount: { $size: "$attachments" },
 								},
