@@ -490,6 +490,7 @@ exports.addTeamMembers = async (req, res, next) => {
 											$push: {
 												teamMembers: {
 													member: userExists._id,
+													role: guest ? "guest" : "user",
 													designation: designation || undefined,
 												},
 											},
@@ -770,7 +771,7 @@ exports.roleChangeAndRemoveTeamMembers = async (req, res, next) => {
 		if (workspaceId) {
 			if (isValidObjectId(workspaceId)) {
 				requestFor = requestFor != undefined ? String(requestFor).toLowerCase() : undefined;
-				if (["admin", "user", "remove"].includes(requestFor)) {
+				if (["admin", "user", "guest", "remove"].includes(requestFor)) {
 					const workspaceExists = await Workspace.exists({ _id: workspaceId });
 					if (workspaceExists) {
 						const doIHaveAccess = await Workspace.exists({
@@ -888,7 +889,7 @@ exports.roleChangeAndRemoveTeamMembers = async (req, res, next) => {
 					if (!requestFor) {
 						issue.message = "Please provide requestFor keyword!";
 					} else {
-						issue.message = "Invalid keyword!";
+						issue.message = `Invalid keyword!- only valid keywords are: "admin", "user", "guest", "remove"`;
 					}
 				}
 			} else {

@@ -17,7 +17,7 @@ const workspaceSchema = new Schema(
 					},
 					role: {
 						type: String,
-						enum: ["owner", "admin", "user"],
+						enum: ["owner", "admin", "user", "guest"],
 						default: "user",
 						required: true,
 					},
