@@ -13,6 +13,7 @@ exports.contentPermission = (accessFor = []) => {
 		const issue = {};
 		let statusCode = 400;
 		let { workspaceId, spaceId, spaceFileId, listId, cardId, commentId } = req.params;
+		workspaceId = workspaceId || req.body.workspaceId;
 
 		try {
 			let member;
