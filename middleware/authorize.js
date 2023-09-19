@@ -3,6 +3,7 @@ const { isValidObjectId, Types } = require("mongoose");
 const CommentChat = require("../models/CommentChat");
 const Card = require("../models/Card");
 const List = require("../models/List");
+const SpaceFile = require("../models/SpaceFile");
 const Space = require("../models/Space");
 const Workspace = require("../models/Workspace");
 
@@ -11,7 +12,7 @@ exports.contentPermission = (accessFor = []) => {
 		const user = req.user;
 		const issue = {};
 		let statusCode = 400;
-		let { workspaceId, spaceId, listId, cardId, commentId } = req.params;
+		let { workspaceId, spaceId, spaceFileId, listId, cardId, commentId } = req.params;
 
 		try {
 			let member;
@@ -122,6 +123,42 @@ exports.contentPermission = (accessFor = []) => {
 					}
 				} else {
 					issue.listId = "Invalid list Obj Id";
+				}
+			} else if (spaceFileId) {
+				if (isValidObjectId(spaceFileId)) {
+					const spaceFile = await SpaceFile.findOne({ _id: spaceFileId }).select("spaceRef");
+					if (spaceFile) {
+						const space = await Space.findOne({ _id: spaceFile.spaceRef }).select("workSpaceRef");
+						if (space) {
+							const spaceAccess = await Space.aggregate([
+								{ $match: { _id: Types.ObjectId(spaceFile.spaceRef) } },
+								{ $unwind: "$members" }, // Unwind the array
+								{ $match: { "members.member": Types.ObjectId(user._id) } },
+								{ $project: { _id: 0, member: "$members" } },
+							]);
+
+							const workspaceAccess = await Workspace.aggregate([
+								{ $match: { _id: Types.ObjectId(space.workSpaceRef) } },
+								{ $unwind: "$teamMembers" }, // Unwind the array
+								{ $match: { "teamMembers.member": Types.ObjectId(user._id) } },
+								{ $project: { _id: 0, teamMember: "$teamMembers" } },
+							]);
+
+							if (workspaceAccess.length) {
+								member = {
+									_id: workspaceAccess[0].teamMember.member,
+									workspaceRole: workspaceAccess[0].teamMember.role,
+									spaceRole: spaceAccess[0].member.role,
+								};
+							}
+						} else {
+							issue.message = "Something is wrong";
+						}
+					} else {
+						issue.spaceFileId = "Space File does not exists with the Obj Id";
+					}
+				} else {
+					issue.spaceFileId = "Invalid space File Obj Id";
 				}
 			} else if (spaceId) {
 				if (isValidObjectId(spaceId)) {

@@ -7,6 +7,7 @@ const spaceChatRoutes = require("./chat");
 const boardRoutes = require("./board");
 const rowRoutes = require("./row");
 const calendarRoutes = require("./calendar");
+const spaceFileRoutes = require("./spaceFile");
 
 spaceRouter.post("/", contentPermission(["owner"]), createSpace);
 spaceRouter.get("/", getSpaces);
@@ -20,5 +21,6 @@ spaceRouter.use("/:spaceId/chat", spaceChatRoutes);
 spaceRouter.use("/:spaceId/board", boardRoutes);
 spaceRouter.use("/:spaceId/row", rowRoutes);
 spaceRouter.use("/:spaceId/calendar", calendarRoutes);
+spaceRouter.use("/:spaceId/files", spaceFileRoutes);
 
 module.exports = spaceRouter;
