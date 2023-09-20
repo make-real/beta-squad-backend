@@ -1,4 +1,5 @@
 const { isValidObjectId } = require("mongoose");
+const { LogoScrape } = require("logo-scrape");
 
 const Space = require("../../../models/Space");
 const SpaceFile = require("../../../models/SpaceFile");
@@ -41,6 +42,8 @@ exports.addSpaceFile = async (req, res, next) => {
 				const valid = urlRegex.test(link);
 				if (valid) {
 					linkOk = true;
+					const result = await LogoScrape.getLogo(link);
+					var logo = result?.url;
 				} else {
 					issue.link = "Invalid link!";
 				}
@@ -53,6 +56,7 @@ exports.addSpaceFile = async (req, res, next) => {
 					title,
 					subtitle,
 					link,
+					logo,
 					spaceRef: spaceId,
 					createdBy: user._id,
 				});
@@ -183,6 +187,8 @@ exports.updateSpaceFile = async (req, res, next) => {
 				const valid = urlRegex.test(link);
 				if (valid) {
 					linkOk = true;
+					const result = await LogoScrape.getLogo(link);
+					var logo = result?.url;
 				} else {
 					issue.link = "Invalid link!";
 				}
@@ -209,7 +215,7 @@ exports.updateSpaceFile = async (req, res, next) => {
 				}
 
 				if (spaceFileIdOk) {
-					await SpaceFile.updateOne({ _id: spaceFileId }, { title, subtitle, link });
+					await SpaceFile.updateOne({ _id: spaceFileId }, { title, subtitle, link, logo });
 
 					const updateDate = await SpaceFile.findOne({ _id: spaceFileId });
 
