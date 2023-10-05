@@ -15,9 +15,8 @@ exports.notificationsGet = async (req, res, next) => {
 		const getNotifications = await Notification.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit);
 		res.json({ notifications: getNotifications });
 
-		if (limit >= 20) {
-			await Notification.updateMany({ $and: [{ user: user._id }, { seen: false }] }, { seen: true });
-		}
+		const ids = getNotifications.map((item) => item._id);
+		await Notification.updateMany({ $and: [{ user: user._id }, { seen: false }, { $inc: { _id: ids } }] }, { seen: true });
 	} catch (err) {
 		next(err);
 	}
