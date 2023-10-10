@@ -1,4 +1,5 @@
 const { userAuthorization } = require("../middleware/authorization");
+const { onlineOfflineSignalEmit } = require("./func");
 const Call = require("../models/Call");
 const Space = require("../models/Space");
 const { generateToken } = require("../service/agora");
@@ -34,6 +35,8 @@ const socketServer = async () => {
 			}
 			ids.push(String(user._id));
 			socket.join(ids);
+
+			await onlineOfflineSignalEmit("online", userId);
 			return next();
 		} catch (error) {
 			return next(error);
@@ -190,6 +193,8 @@ const socketServer = async () => {
 				user.socketId = null;
 				user.lastOnline = new Date();
 				await user.save();
+
+				await onlineOfflineSignalEmit("offline", userId);
 			} catch (error) {
 				console.log(error);
 			}
