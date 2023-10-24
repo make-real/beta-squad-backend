@@ -8,6 +8,9 @@ const SpaceChat = require("../../../models/SpaceChat");
 const Card = require("../../../models/Card");
 const Checklist = require("../../../models/Checklist");
 const CommentChat = require("../../../models/CommentChat");
+const Notification = require("../../../models/Notification");
+
+const { mailSendWithDynamicTemplate } = require("../../../utils/mail");
 
 /**
  * Create a space
@@ -545,9 +548,9 @@ exports.addMembers = async (req, res, next) => {
 
 		if (spaceId) {
 			if (isValidObjectId(spaceId)) {
-				const spaceExists = await Space.findOne({ _id: spaceId }).select("workSpaceRef").populate({
+				const spaceExists = await Space.findOne({ _id: spaceId }).select("workSpaceRef name").populate({
 					path: "workSpaceRef",
-					select: "_id",
+					select: "_id name",
 				});
 				if (spaceExists) {
 					if (spaceExists.workSpaceRef) {
@@ -571,7 +574,7 @@ exports.addMembers = async (req, res, next) => {
 						if (iAMAdminOfSpaceOfWorkspace || iAMManagerOfTheSpace) {
 							if (memberId) {
 								if (isValidObjectId(memberId)) {
-									const memberExists = await User.exists({ _id: memberId });
+									const memberExists = await User.findOne({ _id: memberId }).select("_id fullName email");
 									if (memberExists) {
 										const alreadyMember = await await Space.exists({ $and: [{ _id: spaceId }, { "members.member": memberId }] });
 										if (!alreadyMember) {
@@ -602,7 +605,23 @@ exports.addMembers = async (req, res, next) => {
 													);
 												}
 
-												return res.json({ message: "Successfully added the member to the space!" });
+												res.json({ message: "Successfully added the member to the space!" });
+
+												// mail sending to the member who has been added to the space
+												const dynamicTemplateData = {
+													name: memberExists.fullName,
+													addedBy: user.fullName,
+													squadName: spaceExists.name,
+													workspaceName: spaceExists?.workSpaceRef.name,
+												};
+												mailSendWithDynamicTemplate(memberExists.email, process.env.TEMPLATE_ID_MEMBER_ADD_IN_SPACE, dynamicTemplateData);
+
+												// notification creating for the member who has been added to the space
+												const notificationStructure = new Notification({
+													user: memberExists._id,
+													message: `${user.fullName} has added you to ${spaceExists.name} space`,
+												});
+												notificationStructure.save();
 											} else {
 												issue.message = "Failed to add member!";
 											}
@@ -634,7 +653,9 @@ exports.addMembers = async (req, res, next) => {
 			issue.message = "Please provide space id!";
 		}
 
-		return res.status(400).json({ issue });
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
 	} catch (err) {
 		next(err);
 	}

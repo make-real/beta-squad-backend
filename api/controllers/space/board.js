@@ -7,6 +7,7 @@ const Card = require("../../../models/Card");
 const Checklist = require("../../../models/Checklist");
 const CommentChat = require("../../../models/CommentChat");
 const Tag = require("../../../models/Tag");
+const Notification = require("../../../models/Notification");
 const { multipleFilesCheckAndUpload } = require("../../../utils/file");
 const { isValidEmail, usernameGenerating, splitSpecificParts, hexAColorGen, cardKeyGen } = require("../../../utils/func");
 const { mailSendWithDynamicTemplate } = require("../../../utils/mail");
@@ -1130,12 +1131,29 @@ exports.updateCard = async (req, res, next) => {
 								res.json({ updatedCard: card });
 
 								if (assignUser) {
+									// mail sending to the user who assigned to the task
 									const dynamicTemplateData = {
 										name: assignUserData.fullName,
 										assignedBy: user.fullName,
 										taskName: card.name,
 									};
 									mailSendWithDynamicTemplate(assignUserData.email, process.env.TEMPLATE_ID_ASSIGN_TASK, dynamicTemplateData);
+
+									// notification creating for the user who assigned to the task
+									const notificationStructure = new Notification({
+										user: assignUserData._id,
+										message: `${user.fullName} has assigned you to ${card.name} task`,
+									});
+									notificationStructure.save();
+								}
+
+								// notification creating for the assigned members about updating task
+								for (member of card.assignee) {
+									const notificationStructure = new Notification({
+										user: member._id,
+										message: `Task ${card.name} has been updated by ${user.fullName}`,
+									});
+									notificationStructure.save();
 								}
 							}
 						}
@@ -2042,13 +2060,24 @@ exports.createComment = async (req, res, next) => {
 						}
 					);
 
-					// notification send to mentioned users mail who is not online
+					const cardData = await Card.findOne({ _id: cardId }).select("name");
+
+					// notification creating for the all mentioned users
+					const mentionedUsersData = await User.find({ _id: { $in: mentionedUsers } }).select("_id");
+					for (const each of mentionedUsersData) {
+						const notificationStructure = new Notification({
+							user: each._id,
+							message: `${user.fullName} has mentioned you to ${cardData.name} task comments`,
+						});
+						notificationStructure.save();
+					}
+
+					// mail send to mentioned users who is not online
 					const dt = new Date();
 					dt.setMinutes(dt.getMinutes() - 1);
-					const mentionedUsersData = await User.find({ $and: [{ _id: { $in: mentionedUsers } }, { $or: [{ socketId: { $ne: null } }, { lastOnline: { $lt: dt } }] }] }).select("_id fullName email");
+					const mentionedOnlineUsersData = await User.find({ $and: [{ _id: { $in: mentionedUsers } }, { $or: [{ socketId: { $ne: null } }, { lastOnline: { $lt: dt } }] }] }).select("_id fullName email");
 
-					const cardData = await Card.findOne({ _id: cardId }).select("name");
-					for (const each of mentionedUsersData) {
+					for (const each of mentionedOnlineUsersData) {
 						const dynamicTemplateData = {
 							name: each.fullName,
 							mentionedBy: user.fullName,

@@ -5,6 +5,7 @@ const { splitSpecificParts } = require("../../../utils/func");
 const { multipleFilesCheckAndUpload, upload } = require("../../../utils/file");
 const { mailSendWithDynamicTemplate } = require("../../../utils/mail");
 const User = require("../../../models/User");
+const Notification = require("../../../models/Notification");
 
 exports.sendMessage = async (req, res, next) => {
 	let { textMessage, replayOf } = req.body;
@@ -174,13 +175,24 @@ exports.sendMessage = async (req, res, next) => {
 				// Operation End
 
 				if (mentionedUsers.length) {
-					// notification send to mentioned users mail who is not online
+					const spaceData = await Space.findOne({ _id: spaceId }).select("name");
+
+					// notification creating for the all mentioned users
+					const mentionedUsersData = await User.find({ _id: { $in: mentionedUsers } }).select("_id");
+					for (const each of mentionedUsersData) {
+						const notificationStructure = new Notification({
+							user: each._id,
+							message: `${user.fullName} has mentioned you to ${spaceData.name} space chat`,
+						});
+						notificationStructure.save();
+					}
+
+					// mail send to mentioned users who is not online
 					const dt = new Date();
 					dt.setMinutes(dt.getMinutes() - 1);
-					const mentionedUsersData = await User.find({ $and: [{ _id: { $in: mentionedUsers } }, { $or: [{ socketId: { $ne: null } }, { lastOnline: { $lt: dt } }] }] }).select("_id fullName email");
+					const mentionedOnlineUsersData = await User.find({ $and: [{ _id: { $in: mentionedUsers } }, { $or: [{ socketId: { $ne: null } }, { lastOnline: { $lt: dt } }] }] }).select("_id fullName email");
 
-					const spaceData = await Space.findOne({ _id: spaceId }).select("name");
-					for (const each of mentionedUsersData) {
+					for (const each of mentionedOnlineUsersData) {
 						const dynamicTemplateData = {
 							name: each.fullName,
 							mentionedBy: user.fullName,

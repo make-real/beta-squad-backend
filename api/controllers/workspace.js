@@ -772,7 +772,7 @@ exports.roleChangeAndRemoveTeamMembers = async (req, res, next) => {
 			if (isValidObjectId(workspaceId)) {
 				requestFor = requestFor != undefined ? String(requestFor).toLowerCase() : undefined;
 				if (["admin", "user", "guest", "remove"].includes(requestFor)) {
-					const workspaceExists = await Workspace.exists({ _id: workspaceId });
+					const workspaceExists = await Workspace.findOne({ _id: workspaceId }).select("name");
 					if (workspaceExists) {
 						const doIHaveAccess = await Workspace.exists({
 							$and: [
@@ -791,7 +791,7 @@ exports.roleChangeAndRemoveTeamMembers = async (req, res, next) => {
 						});
 						if (doIHaveAccess) {
 							if (memberId && isValidObjectId(memberId)) {
-								const userExists = await User.findOne({ _id: memberId }).select("_id");
+								const userExists = await User.findOne({ _id: memberId }).select("_id fullName email");
 								if (userExists) {
 									const existsInWorkspace = await Workspace.exists({ $and: [{ _id: workspaceId }, { "teamMembers.member": userExists._id }] });
 									if (existsInWorkspace) {
@@ -832,7 +832,23 @@ exports.roleChangeAndRemoveTeamMembers = async (req, res, next) => {
 													{ $set: { "teamMembers.$.role": requestFor } }
 												);
 
-												return res.json({ message: `Successfully role changed to ${requestFor}` });
+												res.json({ message: `Successfully role changed to ${requestFor}` });
+
+												// mail sending to the member whose role has been changed
+												const dynamicTemplateData = {
+													name: userExists.fullName,
+													updatedBy: user.fullName,
+													role: requestFor,
+													workspaceName: workspaceExists.name,
+												};
+												mailSendWithDynamicTemplate(userExists.email, process.env.TEMPLATE_ID_MEMBER_WORKSPACE_ROLE_CHANGE, dynamicTemplateData);
+
+												// notification creating for the member whose role has been changed
+												const notificationStructure = new Notification({
+													user: userExists._id,
+													message: `${user.fullName} has updated your role to ${requestFor} in ${workspaceExists.name} workspace`,
+												});
+												notificationStructure.save();
 											} else {
 												await Workspace.updateOne(
 													{ _id: workspaceId },
@@ -859,7 +875,7 @@ exports.roleChangeAndRemoveTeamMembers = async (req, res, next) => {
 													}
 												);
 
-												return res.json({ message: "Successfully remove member from the workspace" });
+												res.json({ message: "Successfully remove member from the workspace" });
 											}
 										} else {
 											if (!iAmOwnerInTheWorkSpace && memberOwnerInTheWorkSpace) {
@@ -899,7 +915,9 @@ exports.roleChangeAndRemoveTeamMembers = async (req, res, next) => {
 			issue.message = "Please provide workspace id!";
 		}
 
-		return res.status(400).json({ issue });
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
 	} catch (err) {
 		next(err);
 	}
