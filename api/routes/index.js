@@ -8,6 +8,7 @@ const userRoutes = require("./user");
 const workspaceRoutes = require("./workspace");
 const spaceRoutes = require("./space");
 const notificationRoutes = require("./notification");
+const publicRoutes = require("./public");
 
 router.use("/admin-auth", adminAuthRoutes);
 router.use("/admin", adminAuthorization, adminRoutes);
@@ -16,5 +17,6 @@ router.use("/users", userAuthorization, userRoutes);
 router.use("/workspaces", userAuthorization, workspaceRoutes);
 router.use("/spaces", userAuthorization, spaceRoutes);
 router.use("/notification", userAuthorization, notificationRoutes);
+router.use("/public", publicRoutes);
 
 module.exports = router;
