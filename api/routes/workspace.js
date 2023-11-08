@@ -25,6 +25,6 @@ workspaceRouter.post("/:workspaceId/tags", contentPermission(["owner", "admin"])
 workspaceRouter.get("/:workspaceId/tags", getTags);
 workspaceRouter.patch("/:workspaceId/tags/:tagId", contentPermission(["owner", "admin"]), editTags);
 workspaceRouter.delete("/:workspaceId/tags/:tagId", contentPermission(["owner", "admin"]), deleteTags);
-workspaceRouter.use("/:workspaceId/chat/", chatRoutes);
+workspaceRouter.use("/:workspaceId/chat/", contentPermission(["owner", "admin", "user", "guest"]), chatRoutes);
 
 module.exports = workspaceRouter;

@@ -189,4 +189,49 @@ const cardKeyGen = async (spaceId) => {
 	return cardKey;
 };
 
-module.exports = { isValidEmail, usernameGenerating, splitSpecificParts, generatePassword, hexAColorGen, randomDigit, userLoginSessionCreate, userSessionCreate, adminLoginSessionCreate, adminSessionCreate, cardKeyGen };
+const getLastMomentOfCurrentMonth = () => {
+	const now = new Date();
+	const year = now.getFullYear();
+	const month = now.getMonth() + 1;
+	const lastMomentOfTheMonth = new Date(year, month, 1, 0, 0, 0, 0);
+	lastMomentOfTheMonth.setSeconds(lastMomentOfTheMonth.getSeconds() - 1);
+	return lastMomentOfTheMonth;
+};
+
+function getNextMonthFirstMoment() {
+	const currentDate = new Date();
+	// Calculate the next month
+	const nextMonth = (currentDate.getMonth() + 1) % 12;
+
+	// If the next month is January, update the year as well
+	const nextYear = nextMonth === 0 ? currentDate.getFullYear() + 1 : currentDate.getFullYear();
+
+	// Set the date to the first day of the next month
+	const nextMonthDate = new Date(nextYear, nextMonth, 1, 0, 0, 0, 0);
+
+	return nextMonthDate;
+}
+
+function updateToNextMonth(timestamp) {
+	const currentDate = new Date(timestamp);
+
+	// Get the current month and year
+	let currentMonth = currentDate.getMonth();
+	let currentYear = currentDate.getFullYear();
+
+	// Calculate the next month
+	currentMonth = (currentMonth + 1) % 12;
+
+	// If the next month is January, update the year as well
+	if (currentMonth === 0) {
+		currentYear++;
+	}
+
+	// Set the month and year of the currentDate to the next month and year
+	currentDate.setMonth(currentMonth);
+	currentDate.setFullYear(currentYear);
+
+	return currentDate;
+}
+
+module.exports = { isValidEmail, usernameGenerating, splitSpecificParts, generatePassword, hexAColorGen, randomDigit, userLoginSessionCreate, userSessionCreate, adminLoginSessionCreate, adminSessionCreate, cardKeyGen, getNextMonthFirstMoment, updateToNextMonth };

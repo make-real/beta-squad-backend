@@ -17,7 +17,7 @@ spaceRouter.delete("/:spaceId", contentPermission(["owner"]), deleteSpace);
 spaceRouter.put("/:spaceId/add-members", contentPermission(["owner", "admin", "manager"]), addMembers);
 spaceRouter.put("/:spaceId/remove-members", contentPermission(["owner", "admin", "manager"]), removeMembers);
 spaceRouter.get("/:spaceId/members", getMembers);
-spaceRouter.use("/:spaceId/chat", spaceChatRoutes);
+spaceRouter.use("/:spaceId/chat", contentPermission(["owner", "admin", "user", "guest"]), spaceChatRoutes);
 spaceRouter.use("/:spaceId/board", boardRoutes);
 spaceRouter.use("/:spaceId/row", rowRoutes);
 spaceRouter.use("/:spaceId/calendar", calendarRoutes);

@@ -14,6 +14,7 @@ const SpaceChat = require("../../models/SpaceChat");
 const Checklist = require("../../models/Checklist");
 const CommentChat = require("../../models/CommentChat");
 const Notification = require("../../models/Notification");
+const Subscription = require("../../models/Subscription");
 
 /**
  * Create a workspace
@@ -77,7 +78,35 @@ exports.createWorkspace = async (req, res, next) => {
 			}
 		}
 
-		if (nameOk && logoOk) {
+		let subscriptionOk;
+		const subscription = await Subscription.exists({ user: user._id });
+		if (!subscription) {
+			const expiredDate = new Date();
+			expiredDate.setDate(expiredDate.getDate() + 7);
+			const subscriptionStructure = new Subscription({
+				type: "TRIAL_SUB",
+				paid: true,
+				user: user._id,
+				startDate: new Date(),
+				expiredDate,
+			});
+
+			await subscriptionStructure.save();
+
+			subscriptionOk = true;
+		} else {
+			const subscription = await Subscription.findOne({ user: user._id, expiredDate: { $gt: new Date() } })
+				.select("type paid stop")
+				.sort({ createdAt: 1 });
+
+			if (subscription && (subscription.paid || !subscription.stop)) {
+				subscriptionOk = true;
+			} else {
+				issue.message = "Subscription Required!";
+			}
+		}
+
+		if (nameOk && logoOk && subscriptionOk) {
 			const workspaceStructure = new Workspace({
 				name,
 				owner: user._id,

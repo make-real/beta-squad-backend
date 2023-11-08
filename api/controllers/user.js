@@ -9,6 +9,7 @@ const SpaceChat = require("../../models/SpaceChat");
 const Checklist = require("../../models/Checklist");
 const CommentChat = require("../../models/CommentChat");
 const UserSession = require("../../models/UserSession");
+const Subscription = require("../../models/Subscription");
 const { isValidEmail } = require("../../utils/func");
 const { imageCheck, upload } = require("../../utils/file");
 const { parseJWT } = require("../../utils/jwt");
@@ -71,7 +72,12 @@ exports.usersProfile = async (req, res, next) => {
 		} else {
 			req.user.emailVerified = undefined;
 			req.user.phoneVerified = undefined;
-			return res.json({ user: req.user });
+
+			const u = JSON.parse(JSON.stringify(req.user));
+			u.subscription = await Subscription.findOne({ user: req.user._id, expiredDate: { $gt: new Date() } })
+				.sort({ createdAt: 1 })
+				.select("type paid stop startDate expiredDate -_id");
+			return res.json({ user: u });
 		}
 
 		return res.status(400).json({ issue });
