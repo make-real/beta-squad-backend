@@ -6,7 +6,11 @@ const { defaultTags, defaultBoards } = require("../../config/centralVariables");
 const User = require("../../models/User");
 const Workspace = require("../../models/Workspace");
 const WorkspaceSetting = require("../../models/WorkspaceSetting");
+const ChatHeader = require("../../models/ChatHeader");
+const Chat = require("../../models/Chat");
 const Space = require("../../models/Space");
+const SpaceFile = require("../../models/SpaceFile");
+const Call = require("../../models/Call");
 const Card = require("../../models/Card");
 const Tag = require("../../models/Tag");
 const List = require("../../models/List");
@@ -433,12 +437,17 @@ exports.deleteWorkspace = async (req, res, next) => {
 							for (const space of findSpaces) {
 								await List.deleteMany({ spaceRef: space._id });
 								await SpaceChat.deleteMany({ to: space._id });
+								await SpaceFile.deleteMany({ spaceRef: space._id });
+								await Call.deleteMany({ space: space._id });
 								await Card.deleteMany({ spaceRef: space._id });
 								await Checklist.deleteMany({ spaceRef: space._id });
 								await CommentChat.deleteMany({ spaceRef: space._id });
 							}
 							await Tag.deleteMany({ workSpaceRef: workspaceId });
 							await Space.deleteMany({ workSpaceRef: workspaceId });
+							const chatHeaderIds = await ChatHeader.find({ workSpaceRef: workspaceId }).distinct("_id");
+							await ChatHeader.deleteMany({ workSpaceRef: workspaceId });
+							await Chat.deleteMany({ chatHeaderRef: chatHeaderIds });
 						} else {
 							issue.space = "Failed to delete!";
 						}

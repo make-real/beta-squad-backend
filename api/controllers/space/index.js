@@ -2,6 +2,8 @@ const { isValidObjectId } = require("mongoose");
 const { defaultBoards } = require("../../../config/centralVariables");
 const Workspace = require("../../../models/Workspace");
 const Space = require("../../../models/Space");
+const SpaceFile = require("../../../models/SpaceFile");
+const Call = require("../../../models/Call");
 const User = require("../../../models/User");
 const List = require("../../../models/List");
 const SpaceChat = require("../../../models/SpaceChat");
@@ -503,6 +505,8 @@ exports.deleteSpace = async (req, res, next) => {
 						if (iAMAdminOfSpaceOfWorkspace || iAMManagerOfTheSpace) {
 							await List.deleteMany({ spaceRef: spaceExists._id });
 							await SpaceChat.deleteMany({ to: spaceExists._id });
+							await SpaceFile.deleteMany({ spaceRef: spaceExists._id });
+							await Call.deleteMany({ space: spaceExists._id });
 							await Card.deleteMany({ spaceRef: spaceExists._id });
 							await Checklist.deleteMany({ spaceRef: spaceExists._id });
 							await CommentChat.deleteMany({ spaceRef: spaceExists._id });

@@ -2,7 +2,12 @@ const bcrypt = require("bcrypt");
 const { phone: phoneNumberValidator } = require("phone");
 const { isValidObjectId } = require("mongoose");
 const User = require("../../models/User");
+const Workspace = require("../../models/Workspace");
+const WorkspaceSetting = require("../../models/WorkspaceSetting");
+const Notification = require("../../models/Notification");
 const Space = require("../../models/Space");
+const SpaceFile = require("../../models/SpaceFile");
+const Call = require("../../models/Call");
 const List = require("../../models/List");
 const Card = require("../../models/Card");
 const SpaceChat = require("../../models/SpaceChat");
@@ -295,6 +300,8 @@ exports.deleteAccount = async (req, res, next) => {
 		for (const space of findSpaces) {
 			await List.deleteMany({ spaceRef: space._id });
 			await SpaceChat.deleteMany({ to: space._id });
+			await SpaceFile.deleteMany({ spaceRef: space._id });
+			await Call.deleteMany({ space: space._id });
 			await Card.deleteMany({ spaceRef: space._id });
 			await Checklist.deleteMany({ spaceRef: space._id });
 			await CommentChat.deleteMany({ spaceRef: space._id });
@@ -310,6 +317,20 @@ exports.deleteAccount = async (req, res, next) => {
 				},
 			}
 		);
+
+		await Workspace.updateOne(
+			{ teamMembers: { $elemMatch: { member: user._id } } },
+			{
+				$pull: {
+					teamMembers: {
+						member: user._id,
+					},
+				},
+			}
+		);
+		await WorkspaceSetting.deleteMany({ user: user._id });
+		await Notification.deleteMany({ user: user._id });
+		await Subscription.deleteMany({ user: user._id });
 		await UserSession.deleteMany({ user: user._id });
 		await User.deleteOne({ _id: user._id });
 
