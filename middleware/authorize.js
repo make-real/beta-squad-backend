@@ -25,7 +25,7 @@ const subscriptionCheck = async (spaceId, workSpaceId) => {
 		.select("type paid stop")
 		.sort({ createdAt: 1 });
 
-	if (!subscription && (!subscription.paid || subscription.stop)) {
+	if (subscription && (subscription.paid || !subscription.stop)) {
 		return { status: true, message: "OK" };
 	} else {
 		return { status: false, message: "Subscription required by the owner of the workspace!" };
