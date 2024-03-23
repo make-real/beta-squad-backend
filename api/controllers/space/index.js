@@ -680,8 +680,10 @@ exports.removeMembers = async (req, res, next) => {
 		const user = req.user;
 
 		const issue = {};
-		if (user._id && memberId) {
-			issue.message = "You can't remove yourself from this space";
+		if (user._id === memberId) {
+			return res.status(400).json({
+				issue: [{ message: "You can't remove yourself from this space" }],
+			});
 		}
 
 		if (spaceId) {
@@ -709,6 +711,26 @@ exports.removeMembers = async (req, res, next) => {
 								},
 							],
 						});
+
+						const iAmOwnerOfWorkspace = await Workspace.exists({
+							$and: [
+								{ _id: workSpaceRef },
+								{
+									teamMembers: {
+										$elemMatch: {
+											member: memberId,
+											role: "owner",
+										},
+									},
+								},
+							],
+						});
+
+						if (iAmOwnerOfWorkspace) {
+							return res.status(400).json({
+								issue: [{ message: "You can't remove owner from any space of this workspace" }],
+							});
+						}
 
 						const iAMManagerOfTheSpace = await Space.exists({ $and: [{ _id: spaceId }, { members: { $elemMatch: { member: user._id, role: "manager" } } }] });
 						if (iAMAdminOfSpaceOfWorkspace || iAMManagerOfTheSpace) {
