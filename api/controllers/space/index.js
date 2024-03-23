@@ -276,7 +276,7 @@ exports.getSpaceDetails = async (req, res, next) => {
 									{ _id: spaceId },
 									{
 										members: { $slice: [skip, limit] },
-									}
+									},
 								).select("+members");
 
 								getSpace = JSON.parse(JSON.stringify(getSpace));
@@ -440,7 +440,7 @@ exports.updateSpace = async (req, res, next) => {
 							description,
 							privacy,
 							color,
-						}
+						},
 					);
 
 					if (updateSpace.modifiedCount) {
@@ -590,7 +590,7 @@ exports.addMembers = async (req, res, next) => {
 															member: memberId,
 														},
 													},
-												}
+												},
 											);
 
 											if (memberPush.modifiedCount) {
@@ -605,7 +605,7 @@ exports.addMembers = async (req, res, next) => {
 																	member: memberId,
 																},
 															},
-														}
+														},
 													);
 												}
 
@@ -678,7 +678,11 @@ exports.removeMembers = async (req, res, next) => {
 
 	try {
 		const user = req.user;
+
 		const issue = {};
+		if (user._id && memberId) {
+			issue.message = "You can't remove yourself from this space";
+		}
 
 		if (spaceId) {
 			if (isValidObjectId(spaceId)) {
@@ -720,7 +724,7 @@ exports.removeMembers = async (req, res, next) => {
 														member: memberId,
 													},
 												},
-											}
+											},
 										);
 
 										if (memberPush.modifiedCount) {
@@ -786,7 +790,7 @@ exports.getMembers = async (req, res, next) => {
 							{ _id: spaceId },
 							{
 								members: { $slice: [skip, limit] },
-							}
+							},
 						)
 							.select("+members -name -description -privacy -color -workSpaceRef")
 							.populate({
