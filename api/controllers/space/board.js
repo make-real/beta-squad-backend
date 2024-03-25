@@ -187,7 +187,7 @@ exports.getLists = async (req, res, next) => {
 						});
 					}
 
-					let getLists = await List.aggregate(pipeline);
+					let getLists = await List.aggregate(pipeline).sort({ order: 1 });
 
 					res.json({ lists: getLists });
 				} else {
@@ -296,7 +296,7 @@ exports.deleteList = async (req, res, next) => {
 									{ _id: list._id },
 									{
 										order,
-									}
+									},
 								);
 								order = order + 1;
 							}
@@ -383,7 +383,7 @@ exports.orderOrSortList = async (req, res, next) => {
 										{ _id: list._id },
 										{
 											order: orderNum,
-										}
+										},
 									);
 									orderNum = orderNum + 1;
 								}
@@ -395,7 +395,7 @@ exports.orderOrSortList = async (req, res, next) => {
 								{ _id: listId },
 								{
 									order,
-								}
+								},
 							);
 
 							const list = await List.findOne({ _id: listId }).select("-createdAt -updatedAt -creator");
@@ -414,7 +414,7 @@ exports.orderOrSortList = async (req, res, next) => {
 										{ _id: list._id },
 										{
 											order: orderNum,
-										}
+										},
 									);
 								}
 								/****  END: next lists order number rearrange ****/
@@ -428,7 +428,7 @@ exports.orderOrSortList = async (req, res, next) => {
 									{ _id: list._id },
 									{
 										order: orderNum,
-									}
+									},
 								);
 								orderNum = orderNum + 1;
 							}
@@ -993,7 +993,7 @@ exports.updateCard = async (req, res, next) => {
 																member: assignUser,
 															},
 														},
-													}
+													},
 												);
 											}
 
@@ -1006,7 +1006,7 @@ exports.updateCard = async (req, res, next) => {
 															member: assignUser,
 														},
 													},
-												}
+												},
 											);
 										}
 
@@ -1108,7 +1108,7 @@ exports.updateCard = async (req, res, next) => {
 											attachments: removeAttachmentUrl,
 											assignee: removeAssignedUser,
 										},
-									}
+									},
 								);
 
 								const card = await Card.findOne({ _id: cardId })
@@ -1245,7 +1245,7 @@ exports.moveCard = async (req, res, next) => {
 												{
 													listRef: newListId,
 													order: orderNumber,
-												}
+												},
 											);
 
 											const card = await Card.findOne({ _id: cardId }).select("name listRef order spaceRef");
@@ -1262,7 +1262,7 @@ exports.moveCard = async (req, res, next) => {
 													{ _id: card._id },
 													{
 														order: odrNum,
-													}
+													},
 												);
 												odrNum = odrNum + 1;
 											}
@@ -1280,7 +1280,7 @@ exports.moveCard = async (req, res, next) => {
 														{ _id: card._id },
 														{
 															order: order,
-														}
+														},
 													);
 												}
 												/****  END: cards order number rearrange ****/
@@ -1431,7 +1431,7 @@ exports.deleteCard = async (req, res, next) => {
 									{ _id: card._id },
 									{
 										order,
-									}
+									},
 								);
 								order = order + 1;
 							}
@@ -1517,7 +1517,7 @@ exports.orderOrSortCard = async (req, res, next) => {
 										{ _id: card._id },
 										{
 											order: orderNum,
-										}
+										},
 									);
 									orderNum = orderNum + 1;
 								}
@@ -1529,7 +1529,7 @@ exports.orderOrSortCard = async (req, res, next) => {
 								{ _id: cardId },
 								{
 									order,
-								}
+								},
 							);
 
 							const card = await Card.findOne({ _id: cardId })
@@ -1563,7 +1563,7 @@ exports.orderOrSortCard = async (req, res, next) => {
 										{ _id: card._id },
 										{
 											order: orderNum,
-										}
+										},
 									);
 								}
 								/****  END: next cards order number rearrange ****/
@@ -1577,7 +1577,7 @@ exports.orderOrSortCard = async (req, res, next) => {
 									{ _id: card._id },
 									{
 										order: orderNum,
-									}
+									},
 								);
 								orderNum = orderNum + 1;
 							}
@@ -1656,7 +1656,7 @@ exports.createChecklistItem = async (req, res, next) => {
 									$push: {
 										checkList: saveCheckListItem._id,
 									},
-								}
+								},
 							);
 
 							return res.json({ checkListItem: saveCheckListItem });
@@ -1787,7 +1787,7 @@ exports.updateChecklistItem = async (req, res, next) => {
 									$pull: {
 										assignee: removeAssignedUser,
 									},
-								}
+								},
 							);
 
 							const getUpdated = await Checklist.findOne({ _id: checklistItemExists._id }).populate({
@@ -1851,7 +1851,7 @@ exports.deleteChecklistItem = async (req, res, next) => {
 								$pull: {
 									checkList: checklistItemExists._id,
 								},
-							}
+							},
 						);
 
 						return res.json({ message: "Successfully removed the checklist item" });
@@ -2045,7 +2045,7 @@ exports.createComment = async (req, res, next) => {
 							},
 						],
 					},
-					{ $push: { seenBy: user._id } }
+					{ $push: { seenBy: user._id } },
 				).then();
 				// Operation End
 
@@ -2057,7 +2057,7 @@ exports.createComment = async (req, res, next) => {
 							$pull: {
 								seenBy: { $in: mentionedUsers },
 							},
-						}
+						},
 					);
 
 					const cardData = await Card.findOne({ _id: cardId }).select("name");
@@ -2167,7 +2167,7 @@ exports.getComments = async (req, res, next) => {
 									},
 								],
 							},
-							{ $push: { seenBy: user._id } }
+							{ $push: { seenBy: user._id } },
 						).then();
 						// Operation End
 					} else {
@@ -2245,7 +2245,7 @@ exports.commentsEdit = async (req, res, next) => {
 									"content.text": updateComment,
 									"content.mentionedUsers": mentionedUsers,
 									editedAt: Date.now(),
-								}
+								},
 							);
 
 							if (commentUpdate.modifiedCount) {
@@ -2349,7 +2349,7 @@ exports.commentsDelete = async (req, res, next) => {
 							{ _id: commentId },
 							{
 								deleted: true,
-							}
+							},
 						);
 
 						if (deleteComment.modifiedCount) {
@@ -2442,7 +2442,7 @@ exports.commentsReaction = async (req, res, next) => {
 									{
 										$and: [{ _id: commentId }, { "reactions.reactor": user._id }],
 									},
-									{ $set: { "reactions.$.reaction": reaction } }
+									{ $set: { "reactions.$.reaction": reaction } },
 								);
 							} else {
 								// Push reaction
@@ -2455,7 +2455,7 @@ exports.commentsReaction = async (req, res, next) => {
 												reaction,
 											},
 										},
-									}
+									},
 								);
 							}
 
