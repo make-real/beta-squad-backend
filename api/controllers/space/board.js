@@ -1183,7 +1183,325 @@ exports.updateCard = async (req, res, next) => {
 		next(err);
 	}
 };
+exports.createCardWithAI = async (req, res, next) => {
+	let { spaceId, listId } = req.params;
+	let { name, description, progress, tagId, startDate, endDate, assignUser, checkList } = req.body;
 
+	try {
+		let nameOk, descriptionOk, progressOk, tagIdOk, startDateOk, endDateOk, assignUserOk;
+		const user = req.user;
+		const issue = {};
+
+		const isValidSpaceId = isValidObjectId(spaceId);
+		const isValidListId = isValidObjectId(listId);
+		const existList = await List.findOne({ _id: listId });
+		if (isValidSpaceId && isValidListId) {
+			const existsSpace = await Space.findOne({ _id: spaceId }).select("workSpaceRef");
+			if (existsSpace) {
+				// check card name
+				if (name) {
+					name = String(name)
+						.replace(/\r\n/g, " ")
+						.replace(/[\r\n]/g, " ")
+						.replace(/  +/g, " ")
+						.trim();
+
+					nameOk = true;
+				} else {
+					name = undefined;
+					nameOk = true;
+				}
+
+				// check description
+				if (description) {
+					description = String(description).replace(/  +/g, " ").trim();
+					descriptionOk = true;
+				} else {
+					description = undefined;
+					descriptionOk = true;
+				}
+
+				// check progress number
+				if (progress != undefined) {
+					if (String(parseInt(progress, 10)) != "NaN") {
+						progress = parseInt(progress, 10);
+						if (progress >= 0 && progress <= 100) {
+							progressOk = true;
+						} else {
+							issue.message = "Progress number can not be less than 0 and greater than 100!";
+						}
+					} else {
+						issue.message = "Invalid progress number!";
+					}
+				} else {
+					progress = undefined;
+					progressOk = true;
+				}
+
+				// check tagId
+				if (tagId) {
+					if (isValidObjectId(tagId)) {
+						const tagExists = await Tag.exists({ $and: [{ _id: tagId }, { workSpaceRef: existsSpace.workSpaceRef }] });
+						if (tagExists) {
+							tagIdOk = true;
+						} else {
+							issue.tagId = "Tag not found!!";
+						}
+					} else {
+						issue.tagId = "Invalid tag id!";
+					}
+				} else {
+					tagId = undefined;
+					tagIdOk = true;
+				}
+
+				// check startDate
+				if (startDate) {
+					const startDateParts = startDate.split("/");
+
+					startDate = new Date(`${startDateParts[2]}-${startDateParts[1]}-${startDateParts[0]}`).getTime();
+
+					const validTimestamp = new Date(startDate) > 0;
+					if (validTimestamp) {
+						startDate = new Date(startDate);
+						startDateOk = true;
+					} else {
+						issue.startDate = "Please provide the valid timestamp of start date!";
+					}
+				} else {
+					startDate = undefined;
+					startDateOk = true;
+				}
+
+				// check endDate
+				if (endDate) {
+					const endDateParts = endDate.split("/");
+					endDate = new Date(`${endDateParts[2]}-${endDateParts[1]}-${endDateParts[0]}`).getTime();
+
+					const validTimestamp = new Date(endDate) > 0;
+					if (validTimestamp) {
+						endDate = new Date(endDate);
+						if (startDate && startDateOk) {
+							if (endDate > startDate) {
+								endDateOk = true;
+							} else {
+								issue.endDate = "End time should be greater than start time!";
+							}
+						}
+					} else {
+						issue.endDate = "Please provide the valid timestamp of end date!";
+					}
+				} else {
+					endDate = undefined;
+					endDateOk = true;
+				}
+
+				// assign user check
+				if (assignUser) {
+					const imIOwnerOfTheWorkspace = await Workspace.findOne({
+						$and: [
+							{ _id: existsSpace.workSpaceRef },
+							{
+								teamMembers: {
+									$elemMatch: {
+										member: req.user._id,
+										role: "owner",
+									},
+								},
+							},
+						],
+					}).select("_id");
+					let assignedUsers = [];
+					let assignUserDatas = [];
+					let assignUserData;
+					let user;
+					for (const assigned of assignUser) {
+						const isValidAssignUserId = isValidObjectId(assigned);
+						if (isValidAssignUserId || isValidEmail(assigned)) {
+							if (isValidAssignUserId) {
+								assignUserData = await User.findOne({ _id: assigned }).select("_id fullName email guest");
+								assignedUsers.push(assignUserData._id);
+							} else if (isValidEmail(assigned)) {
+								user = String(assigned).toLowerCase();
+								assignedUsers.push({ assignUser });
+								assignUserData = await User.findOne({ email: assigned }).select("_id fullName email guest");
+								assignUserDatas.push({ assignUserData });
+								if (!assignUserData) {
+									const guestUser = new User({
+										fullName: "Guest",
+										email: assigned,
+										username: await usernameGenerating(assigned),
+										guest: true,
+									});
+									assignUserData = await guestUser.save();
+									assignUserDatas.push({ assignUserData });
+								}
+							}
+						} else {
+							if (isValidAssignUserId) {
+								issue.assignUser = "Invalid assignUser id!";
+							} else {
+								issue.assignUser = "Invalid email!";
+							}
+						}
+						let newUser;
+						if (assignedUsers.length > 0) {
+							for (const user of assignedUsers) {
+								newUser = user;
+								if (!assignUserData.guest || imIOwnerOfTheWorkspace) {
+									const assignUserExistsInSpace = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user }] });
+									if (!assignUserExistsInSpace) {
+										const assignUserExistsInWorkspace = await Workspace.exists({ $and: [{ _id: existsSpace.workSpaceRef }, { "teamMembers.member": user }] });
+										if (!assignUserExistsInWorkspace) {
+											// User push in Workspace
+											await Workspace.updateOne(
+												{ _id: existsSpace.workSpaceRef },
+												{
+													$push: {
+														teamMembers: {
+															member: user,
+														},
+													},
+												},
+											);
+										}
+
+										// Members push in space
+										await Space.updateOne(
+											{ _id: spaceId },
+											{
+												$push: {
+													members: {
+														member: user,
+													},
+												},
+											},
+										);
+									}
+
+									assignUserOk = true;
+								} else {
+									issue.assignUser = "Only owner can assign guest user!";
+								}
+							}
+						} else {
+							issue.assignUser = "There is no user with this obj id!";
+						}
+					}
+				} else {
+					assignUser = undefined;
+					assignUserOk = true;
+				}
+				// generate order number
+				let orderNumber;
+				const existsCard = await Card.exists({ $and: [{ listRef: listId }, { order: 1 }] });
+				if (existsCard) {
+					const highest = await Card.findOne({ listRef: listId }).sort({ order: -1 }).select("order");
+					orderNumber = highest.order + 1;
+				} else {
+					orderNumber = 1;
+				}
+
+				if (nameOk && descriptionOk && progressOk && tagIdOk && startDateOk && endDateOk && assignUserOk) {
+					const newCard = new Card({
+						name,
+						description,
+						startDate,
+						endDate,
+						seenBy: [user._id],
+						tags: tagId,
+						listRef: listId,
+						spaceRef: spaceId,
+						assignee: assignUser,
+						creator: user._id,
+						cardKey: await cardKeyGen(existList.spaceRef),
+						color: hexAColorGen(),
+						order: orderNumber,
+					});
+					const saveCard = await newCard.save();
+
+					const checkLists = [];
+					if (checkList) {
+						for (const check of checkList) {
+							const newCheckList = new Checklist({
+								content: check,
+								checked: false,
+								spaceRef: spaceId,
+								cardRef: saveCard._id,
+							});
+							const saveCardList = await newCheckList.save();
+							checkLists.push(newCheckList._id);
+						}
+						const updateCard = await Card.updateOne({ _id: saveCard._id }, { $set: { checkList: checkLists } });
+					}
+
+					const card = await Card.findOne({ _id: saveCard._id })
+						.select("-createdAt -updatedAt -creator")
+						.populate([
+							{
+								path: "tags",
+								select: "name color",
+							},
+							{
+								path: "checkList",
+								select: "content checked spaceRef cardRef assignee",
+							},
+							{
+								path: "assignee",
+								select: "fullName username avatar email",
+							},
+						]);
+					if (card) {
+						return res.status(201).json({
+							success: true,
+							data: card,
+						});
+					}
+					for (member of card.assignee) {
+						const dynamicTemplateData = {
+							name: member.fullName,
+							assignedBy: user.fullName,
+							taskName: card.name,
+						};
+						const sendMail = await mailSendWithDynamicTemplate(member.email, process.env.TEMPLATE_ID_ASSIGN_TASK, dynamicTemplateData);
+
+						// notification creating for the user who assigned to the task
+						const notificationStructure = new Notification({
+							user: member._id,
+							message: `${user.fullName} has assigned you to ${card.name} task`,
+						});
+						notificationStructure.save();
+					}
+
+					// notification creating for the assigned members about updating task
+					for (member of card.assignee) {
+						const notificationStructure = new Notification({
+							user: member._id,
+							message: `Task ${card.name} has been updated by ${user.fullName}`,
+						});
+						notificationStructure.save();
+					}
+				}
+			} else {
+				issue.spaceId = "Not found space!";
+			}
+		} else {
+			if (!isValidSpaceId) {
+				issue.spaceId = "Invalid space id!";
+			} else if (!isValidListId) {
+				issue.listId = "Invalid list id!";
+			} else if (!isValidCardId) {
+				issue.cardId = "Invalid card id!";
+			}
+		}
+
+		if (!res.headersSent) {
+			res.status(400).json({ issue });
+		}
+	} catch (err) {
+		next(err);
+	}
+};
 exports.moveCard = async (req, res, next) => {
 	let { spaceId, listId, cardId } = req.params;
 	let { newListId, order } = req.body;

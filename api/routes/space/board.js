@@ -3,7 +3,7 @@ const boardRouter = require("express").Router({ mergeParams: true });
 
 const { contentPermission } = require("../../../middleware/authorize");
 
-const { createList, getLists, editList, deleteList, orderOrSortList, createCard, getCards, getSingleCard, updateCard, moveCard, copyCard, deleteCard, orderOrSortCard, createChecklistItem, updateChecklistItem, deleteChecklistItem, createComment, getComments, commentsEdit, commentsDelete, commentsReaction } = require("../../controllers/space/board");
+const { createList, getLists, editList, deleteList, orderOrSortList, createCard, getCards, getSingleCard, updateCard, moveCard, copyCard, deleteCard, orderOrSortCard, createChecklistItem, updateChecklistItem, deleteChecklistItem, createComment, getComments, commentsEdit, commentsDelete, commentsReaction, createCardWithAI } = require("../../controllers/space/board");
 
 boardRouter.post("/", contentPermission(["owner", "admin", "user"]), createList);
 boardRouter.get("/", getLists);
@@ -13,6 +13,7 @@ boardRouter.put("/:listId/order", contentPermission(["owner", "admin", "user"]),
 
 ///////// CARD ///////////////
 boardRouter.post("/:listId/card", contentPermission(["owner", "admin", "user"]), createCard);
+boardRouter.post("/:listId/card-ai", contentPermission(["owner", "admin", "user"]), createCardWithAI);
 boardRouter.get("/:listId/card", getCards);
 boardRouter.get("/:listId/card/:cardId", getSingleCard);
 boardRouter.patch("/:listId/card/:cardId", multipart(), contentPermission(["owner", "admin", "user"]), updateCard);
