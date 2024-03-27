@@ -1185,7 +1185,7 @@ exports.updateCard = async (req, res, next) => {
 };
 exports.createCardWithAI = async (req, res, next) => {
 	let { spaceId, listId } = req.params;
-	let { name, description, progress, tagId, startDate, endDate, assignUser, checkList } = req.body;
+	let { name, description, progress, tagId, startDate, endDate, assignUser, checkList, estimatedTime } = req.body;
 
 	try {
 		let nameOk, descriptionOk, progressOk, tagIdOk, startDateOk, endDateOk, assignUserOk;
@@ -1219,6 +1219,13 @@ exports.createCardWithAI = async (req, res, next) => {
 				} else {
 					description = undefined;
 					descriptionOk = true;
+				}
+				if (estimatedTime) {
+					estimatedTime = String(estimatedTime)
+						.replace(/\r\n/g, " ")
+						.replace(/[\r\n]/g, " ")
+						.replace(/  +/g, " ")
+						.trim();
 				}
 
 				// check progress number
@@ -1417,6 +1424,7 @@ exports.createCardWithAI = async (req, res, next) => {
 						cardKey: await cardKeyGen(existList.spaceRef),
 						color: hexAColorGen(),
 						order: orderNumber,
+						estimatedTime: estimatedTime,
 					});
 					const saveCard = await newCard.save();
 

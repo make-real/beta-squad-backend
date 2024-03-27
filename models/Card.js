@@ -37,6 +37,9 @@ const cardSchema = new Schema(
 			type: String,
 			required: true,
 		},
+		estimatedTime: {
+			type: String,
+		},
 		cardKey: {
 			type: String,
 			required: true,
@@ -86,7 +89,7 @@ const cardSchema = new Schema(
 	},
 	{
 		timestamps: true,
-	}
+	},
 );
 
 const Card = model("Card", cardSchema);
