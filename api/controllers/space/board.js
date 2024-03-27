@@ -1460,18 +1460,19 @@ exports.createCardWithAI = async (req, res, next) => {
 							},
 						]);
 					if (card) {
-						return res.status(201).json({
+						res.status(201).json({
 							success: true,
 							data: card,
 						});
 					}
-					for (member of card.assignee) {
+					for (const member of card.assignee) {
 						const dynamicTemplateData = {
 							name: member.fullName,
 							assignedBy: user.fullName,
 							taskName: card.name,
 						};
-						const sendMail = await mailSendWithDynamicTemplate(member.email, process.env.TEMPLATE_ID_ASSIGN_TASK, dynamicTemplateData);
+
+						mailSendWithDynamicTemplate(member.email, process.env.TEMPLATE_ID_ASSIGN_TASK, dynamicTemplateData);
 
 						// notification creating for the user who assigned to the task
 						const notificationStructure = new Notification({
