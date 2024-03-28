@@ -17,6 +17,6 @@ const defaultTags = [
 	},
 ];
 
-const defaultBoards = ["To Do", "In Progress", "Review", "Done"];
+const defaultBoards = ["To Do", "In Progress", "Review"];
 
 module.exports = { defaultTags, defaultBoards };
