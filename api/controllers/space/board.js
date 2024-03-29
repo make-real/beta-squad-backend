@@ -920,10 +920,10 @@ exports.updateCard = async (req, res, next) => {
 							if (validTimestamp) {
 								endDate = new Date(endDate);
 								if (startDate && startDateOk) {
-									if (endDate > startDate) {
+									if (endDate >= startDate) {
 										endDateOk = true;
 									} else {
-										issue.endDate = "End time should be greater than start time!";
+										issue.endDate = "End time should be greater than or equal to start time!";
 									}
 								} else {
 									if (cardExists.startDate) {
@@ -1291,10 +1291,10 @@ exports.createCardWithAI = async (req, res, next) => {
 					if (validTimestamp) {
 						endDate = new Date(endDate);
 						if (startDate && startDateOk) {
-							if (endDate > startDate) {
+							if (endDate >= startDate) {
 								endDateOk = true;
 							} else {
-								issue.endDate = "End time should be greater than start time!";
+								issue.endDate = "End time should be greater than or equal to start time!";
 							}
 						}
 					} else {
