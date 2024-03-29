@@ -32,6 +32,8 @@ exports.saveAiMessage = async (req, res, next) => {
 				if (!status) {
 					issue.message = "You must provide status";
 				}
+				// Validation
+				console.log("Validation");
 				const AmIinSpace = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
 				if (imIMemberOfTheWorkspace) {
 					if (AmIinSpace) {
