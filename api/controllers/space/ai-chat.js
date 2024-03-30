@@ -5,11 +5,29 @@ const Workspace = require("../../../models/Workspace");
 
 exports.saveAiMessage = async (req, res, next) => {
 	const spaceId = req.params.spaceId;
-	const { message, status } = req.body;
+	const { message, successMessage, failedMessage } = req.body;
 	const user = req.user;
 	try {
 		let issue = {};
 		const isValidSpaceId = isValidObjectId(spaceId);
+
+		if (successMessage) {
+			for (const message of successMessage) {
+				const { error } = new aiChatHistory(message).validateSync();
+				if (error) {
+					issue.message = error.message;
+				}
+			}
+		}
+
+		if (failedMessage) {
+			for (const message of failedMessage) {
+				const { error } = new aiChatHistory(message).validateSync();
+				if (error) {
+					return res.status(400).send(error.message);
+				}
+			}
+		}
 
 		if (isValidSpaceId) {
 			const existSpace = await Space.findOne({ _id: spaceId }).select("workSpaceRef");
@@ -26,12 +44,6 @@ exports.saveAiMessage = async (req, res, next) => {
 						},
 					],
 				});
-				if (status && status !== "success" && status !== "failed") {
-					issue.message = "status should be success or failed";
-				}
-				if (!status) {
-					issue.message = "You must provide status";
-				}
 
 				const AmIinSpace = await Space.exists({ $and: [{ _id: spaceId }, { "members.member": user._id }] });
 				if (imIMemberOfTheWorkspace) {
@@ -41,7 +53,8 @@ exports.saveAiMessage = async (req, res, next) => {
 							spaceRef: spaceId,
 							workSpaceRef: existSpace.workSpaceRef,
 							sender: user._id,
-							status: status,
+							successMessage,
+							failedMessage,
 						});
 						const saveChatHistory = await newAiChat.save();
 						if (saveChatHistory) {
@@ -114,7 +127,7 @@ exports.getAiChatHistory = async (req, res, next) => {
 									localField: "sender",
 									foreignField: "_id",
 									as: "sender",
-									pipeline: [{ $project: { fullName: 1, _id: 0 } }],
+									pipeline: [{ $project: { fullName: 1, _id: 0, avatar: 1 } }],
 								},
 							},
 							{
@@ -123,7 +136,8 @@ exports.getAiChatHistory = async (req, res, next) => {
 									message: 1,
 									sender: 1,
 									createdAt: 1,
-									status: 1,
+									successMessage: 1,
+									failedMessage: 1,
 								},
 							},
 						]);
