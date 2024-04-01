@@ -33,7 +33,7 @@ const workspaceSettingSchema = new Schema(
 	},
 	{
 		timestamps: true,
-	}
+	},
 );
 
 const WorkspaceSetting = model("WorkspaceSetting", workspaceSettingSchema);

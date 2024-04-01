@@ -374,7 +374,7 @@ exports.updateWorkspace = async (req, res, next) => {
 					{
 						name,
 						logo: logoUrl,
-					}
+					},
 				);
 
 				if (updateSpace.modifiedCount) {
@@ -532,7 +532,7 @@ exports.addTeamMembers = async (req, res, next) => {
 													designation: designation || undefined,
 												},
 											},
-										}
+										},
 									);
 
 									// Workspace Setting create for this user
@@ -550,6 +550,8 @@ exports.addTeamMembers = async (req, res, next) => {
 										});
 										await notificationStructure.save();
 
+										global.io.to(String(userExists.socketId)).emit("NEW_NOTIFICATION_RECEIVED", notificationStructure.message);
+
 										// also add the member to the Default(Onboarding) space of the Workspace
 										const findDefaultSpace = await await Space.findOne({ $and: [{ workSpaceRef: workspaceId }, { initialSpace: "yes" }] }).select("_id");
 										if (findDefaultSpace) {
@@ -563,7 +565,7 @@ exports.addTeamMembers = async (req, res, next) => {
 																member: userExists._id,
 															},
 														},
-													}
+													},
 												);
 											}
 										}
@@ -747,7 +749,7 @@ exports.teamMemberDataUpdateInWorkspace = async (req, res, next) => {
 												{
 													$and: [{ _id: workspaceId }, { "teamMembers.member": memberId }],
 												},
-												{ $set: { "teamMembers.$.designation": designation } }
+												{ $set: { "teamMembers.$.designation": designation } },
 											);
 
 											return res.json({ message: `Successfully updated designation of the member` });
@@ -867,7 +869,7 @@ exports.roleChangeAndRemoveTeamMembers = async (req, res, next) => {
 													{
 														$and: [{ _id: workspaceId }, { "teamMembers.member": memberId }],
 													},
-													{ $set: { "teamMembers.$.role": requestFor } }
+													{ $set: { "teamMembers.$.role": requestFor } },
 												);
 
 												res.json({ message: `Successfully role changed to ${requestFor}` });
@@ -887,6 +889,8 @@ exports.roleChangeAndRemoveTeamMembers = async (req, res, next) => {
 													message: `${user.fullName} has updated your role to ${requestFor} in ${workspaceExists.name} workspace`,
 												});
 												notificationStructure.save();
+
+												global.io.to(String(userExists.socketId)).emit("NEW_NOTIFICATION_RECEIVED", notificationStructure.message);
 											} else {
 												await Workspace.updateOne(
 													{ _id: workspaceId },
@@ -896,7 +900,7 @@ exports.roleChangeAndRemoveTeamMembers = async (req, res, next) => {
 																member: memberId,
 															},
 														},
-													}
+													},
 												);
 
 												await WorkspaceSetting.deleteOne({ $and: [{ workSpace: workspaceId }, { user: memberId }] });
@@ -910,7 +914,7 @@ exports.roleChangeAndRemoveTeamMembers = async (req, res, next) => {
 																member: memberId,
 															},
 														},
-													}
+													},
 												);
 
 												res.json({ message: "Successfully remove member from the workspace" });
@@ -1003,14 +1007,14 @@ exports.ownerShipTransferOfWorkspace = async (req, res, next) => {
 										{
 											$and: [{ _id: workspaceId }, { "teamMembers.member": memberId }],
 										},
-										{ $set: { "teamMembers.$.role": "owner" } }
+										{ $set: { "teamMembers.$.role": "owner" } },
 									);
 
 									await Workspace.updateOne(
 										{
 											$and: [{ _id: workspaceId }, { "teamMembers.member": user._id }],
 										},
-										{ $set: { "teamMembers.$.role": "user" } }
+										{ $set: { "teamMembers.$.role": "user" } },
 									);
 
 									return res.json({ message: "Successfully Transferred ownership of the workspace" });
@@ -1075,7 +1079,7 @@ exports.leaveFromWorkspace = async (req, res, next) => {
 										member: user._id,
 									},
 								},
-							}
+							},
 						);
 
 						await WorkspaceSetting.deleteOne({ $and: [{ workSpace: workspaceId }, { user: user._id }] });
@@ -1089,7 +1093,7 @@ exports.leaveFromWorkspace = async (req, res, next) => {
 										member: user._id,
 									},
 								},
-							}
+							},
 						);
 
 						return res.json({ message: "Successfully left from the workplace" });

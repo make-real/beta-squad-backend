@@ -170,7 +170,7 @@ exports.sendMessage = async (req, res, next) => {
 							},
 						],
 					},
-					{ $push: { seenBy: user._id } }
+					{ $push: { seenBy: user._id } },
 				).then();
 				// Operation End
 
@@ -178,13 +178,14 @@ exports.sendMessage = async (req, res, next) => {
 					const spaceData = await Space.findOne({ _id: spaceId }).select("name");
 
 					// notification creating for the all mentioned users
-					const mentionedUsersData = await User.find({ _id: { $in: mentionedUsers } }).select("_id");
+					const mentionedUsersData = await User.find({ _id: { $in: mentionedUsers } }).select("_id socketId");
 					for (const each of mentionedUsersData) {
 						const notificationStructure = new Notification({
 							user: each._id,
 							message: `${user.fullName} has mentioned you to ${spaceData.name} space chat`,
 						});
 						notificationStructure.save();
+						global.io.to(String(each.socketId)).emit("NEW_NOTIFICATION_RECEIVED", notificationStructure.message);
 					}
 
 					// mail send to mentioned users who is not online
@@ -275,7 +276,7 @@ exports.getMessages = async (req, res, next) => {
 								},
 							],
 						},
-						{ $push: { seenBy: user._id } }
+						{ $push: { seenBy: user._id } },
 					).then();
 					// Operation End
 				} else {
@@ -430,7 +431,7 @@ exports.messageEdit = async (req, res, next) => {
 					"content.text": updateMessage,
 					"content.mentionedUsers": mentionedUsers,
 					editedAt: Date.now(),
-				}
+				},
 			);
 
 			if (messageUpdate.modifiedCount) {
@@ -521,7 +522,7 @@ exports.messageDelete = async (req, res, next) => {
 				{ _id: messageId },
 				{
 					deleted: true,
-				}
+				},
 			);
 
 			if (deleteMessage.modifiedCount) {
@@ -626,7 +627,7 @@ exports.messageReaction = async (req, res, next) => {
 					{
 						$and: [{ _id: messageId }, { "reactions.reactor": user._id }],
 					},
-					{ $set: { "reactions.$.reaction": reaction } }
+					{ $set: { "reactions.$.reaction": reaction } },
 				);
 			} else {
 				// Push reaction
@@ -639,7 +640,7 @@ exports.messageReaction = async (req, res, next) => {
 								reaction,
 							},
 						},
-					}
+					},
 				);
 			}
 

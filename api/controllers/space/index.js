@@ -578,7 +578,7 @@ exports.addMembers = async (req, res, next) => {
 						if (iAMAdminOfSpaceOfWorkspace || iAMManagerOfTheSpace) {
 							if (memberId) {
 								if (isValidObjectId(memberId)) {
-									const memberExists = await User.findOne({ _id: memberId }).select("_id fullName email");
+									const memberExists = await User.findOne({ _id: memberId }).select("_id fullName email socketId");
 									if (memberExists) {
 										const alreadyMember = await await Space.exists({ $and: [{ _id: spaceId }, { "members.member": memberId }] });
 										if (!alreadyMember) {
@@ -626,6 +626,7 @@ exports.addMembers = async (req, res, next) => {
 													message: `${user.fullName} has added you to ${spaceExists.name} space`,
 												});
 												notificationStructure.save();
+												global.io.to(String(memberExists.socketId)).emit("NEW_NOTIFICATION_RECEIVED", notificationStructure.message);
 											} else {
 												issue.message = "Failed to add member!";
 											}

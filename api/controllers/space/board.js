@@ -963,10 +963,10 @@ exports.updateCard = async (req, res, next) => {
 							if (isValidAssignUserId || isValidEmail(assignUser)) {
 								var assignUserData;
 								if (isValidAssignUserId) {
-									assignUserData = await User.findOne({ _id: assignUser }).select("_id fullName email guest");
+									assignUserData = await User.findOne({ _id: assignUser }).select("_id fullName email guest socketId");
 								} else if (isValidEmail(assignUser)) {
 									assignUser = String(assignUser).toLowerCase();
-									assignUserData = await User.findOne({ email: assignUser }).select("_id fullName email guest");
+									assignUserData = await User.findOne({ email: assignUser }).select("_id fullName email guest socketId ");
 
 									if (!assignUserData) {
 										const guestUser = new User({
@@ -1126,7 +1126,7 @@ exports.updateCard = async (req, res, next) => {
 										},
 										{
 											path: "assignee",
-											select: "fullName username avatar",
+											select: "fullName username avatar socketId",
 										},
 									]);
 
@@ -1147,6 +1147,7 @@ exports.updateCard = async (req, res, next) => {
 										message: `${user.fullName} has assigned you to ${card.name} task`,
 									});
 									notificationStructure.save();
+									global.io.to(String(assignUserData.socketId)).emit("NEW_NOTIFICATION_RECEIVED", notificationStructure.message);
 								}
 
 								// notification creating for the assigned members about updating task
@@ -1156,6 +1157,7 @@ exports.updateCard = async (req, res, next) => {
 										message: `Task ${card.name} has been updated by ${user.fullName}`,
 									});
 									notificationStructure.save();
+									global.io.to(String(member.socketId)).emit("NEW_NOTIFICATION_RECEIVED", notificationStructure.message);
 								}
 							}
 						}
@@ -1458,7 +1460,7 @@ exports.createCardWithAI = async (req, res, next) => {
 							},
 							{
 								path: "assignee",
-								select: "fullName username avatar email",
+								select: "fullName username avatar email socketId",
 							},
 						]);
 					if (card) {
@@ -1482,6 +1484,7 @@ exports.createCardWithAI = async (req, res, next) => {
 							message: `${user.fullName} has assigned you to ${card.name} task`,
 						});
 						notificationStructure.save();
+						global.io.to(String(member.socketId)).emit("NEW_NOTIFICATION_RECEIVED", notificationStructure.message);
 					}
 
 					// notification creating for the assigned members about updating task
@@ -1491,6 +1494,7 @@ exports.createCardWithAI = async (req, res, next) => {
 							message: `Task ${card.name} has been updated by ${user.fullName}`,
 						});
 						notificationStructure.save();
+						global.io.to(String(member.socketId)).emit("NEW_NOTIFICATION_RECEIVED", notificationStructure.message);
 					}
 				}
 			} else {
@@ -2235,7 +2239,7 @@ exports.createComment = async (req, res, next) => {
 				}
 			}
 			if (ids.length > 0) {
-				const validMentionedUsers = await User.find({ _id: { $in: ids } }).select("_id");
+				const validMentionedUsers = await User.find({ _id: { $in: ids } }).select("_id socketId");
 				for (const user of validMentionedUsers) {
 					mentionedUsers.push(user._id);
 				}
@@ -2392,13 +2396,14 @@ exports.createComment = async (req, res, next) => {
 					const cardData = await Card.findOne({ _id: cardId }).select("name");
 
 					// notification creating for the all mentioned users
-					const mentionedUsersData = await User.find({ _id: { $in: mentionedUsers } }).select("_id");
+					const mentionedUsersData = await User.find({ _id: { $in: mentionedUsers } }).select("_id socketId");
 					for (const each of mentionedUsersData) {
 						const notificationStructure = new Notification({
 							user: each._id,
 							message: `${user.fullName} has mentioned you to ${cardData.name} task comments`,
 						});
 						notificationStructure.save();
+						global.io.to(String(each.socketId)).emit("NEW_NOTIFICATION_RECEIVED", notificationStructure.message);
 					}
 
 					// mail send to mentioned users who is not online
