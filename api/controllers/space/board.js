@@ -862,6 +862,15 @@ exports.updateCard = async (req, res, next) => {
 								progress = parseInt(progress, 10);
 								if (progress >= 0 && progress <= 100) {
 									progressOk = true;
+									if (progress === 4) {
+										const findChecklists = await Checklist.find({ cardRef: cardId });
+										if (findChecklists.length > 0) {
+											for (const card of findChecklists) {
+												card.checked = true;
+												await card.save();
+											}
+										}
+									}
 								} else {
 									issue.message = "Progress number can not be less than 0 and greater than 100!";
 								}
