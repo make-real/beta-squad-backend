@@ -45,7 +45,7 @@ const socketServer = async () => {
 
 	io.on("connection", async (socket) => {
 		const user = socket.request.user;
-
+		socket.emit("socket is connected");
 		// You can do something like emitting an event hare.
 		console.log(`Connected an user through socket:`);
 
@@ -118,7 +118,7 @@ const socketServer = async () => {
 						$set: {
 							"participants.$.camera_off": state,
 						},
-					}
+					},
 				);
 
 				const call = await Call.findById(callID).populate(["participants.user", "space"]);
@@ -137,7 +137,7 @@ const socketServer = async () => {
 						$set: {
 							"participants.$.mic_muted": state,
 						},
-					}
+					},
 				);
 
 				const call = await Call.findById(callID).populate(["participants.user", "space"]);
@@ -160,7 +160,7 @@ const socketServer = async () => {
 								user: user._id,
 							},
 						},
-					}
+					},
 				);
 
 				const call = await Call.findById(callId).populate(["participants.user", "space"]);
