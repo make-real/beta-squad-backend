@@ -1409,7 +1409,8 @@ exports.createCardWithAI = async (req, res, next) => {
 				const existsCard = await Card.exists({ $and: [{ listRef: listId }, { order: 1 }] });
 				if (existsCard) {
 					const highest = await Card.findOne({ listRef: listId }).sort({ order: -1 }).select("order");
-					orderNumber = highest.order + 1;
+					await Card.updateMany({ listRef: listId }, { $inc: { order: 1 } });
+					orderNumber = 1;
 				} else {
 					orderNumber = 1;
 				}
