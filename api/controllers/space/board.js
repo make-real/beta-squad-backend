@@ -1259,17 +1259,22 @@ exports.createCardWithAI = async (req, res, next) => {
 					progressOk = true;
 				}
 
+				let allTagsValid = true;
 				// check tagId
 				if (tagId) {
-					if (isValidObjectId(tagId)) {
-						const tagExists = await Tag.exists({ $and: [{ _id: tagId }, { workSpaceRef: existsSpace.workSpaceRef }] });
-						if (tagExists) {
-							tagIdOk = true;
+					for (const tag of tagId) {
+						if (isValidObjectId(tag)) {
+							const tagExists = await Tag.exists({ $and: [{ _id: tag }, { workSpaceRef: existsSpace.workSpaceRef }] });
+							if (tagExists) {
+								tagIdOk = true;
+							} else {
+								issue.tagId = `Tag not found!! ${tag}`;
+								allTagsValid = false;
+							}
 						} else {
-							issue.tagId = "Tag not found!!";
+							issue.tagId = `Invalid tag id! ${tag}`;
+							allTagsValid = false;
 						}
-					} else {
-						issue.tagId = "Invalid tag id!";
 					}
 				} else {
 					tagId = undefined;
@@ -1424,7 +1429,7 @@ exports.createCardWithAI = async (req, res, next) => {
 					orderNumber = 1;
 				}
 
-				if (nameOk && descriptionOk && progressOk && tagIdOk && startDateOk && endDateOk && assignUserOk) {
+				if (nameOk && descriptionOk && progressOk && tagIdOk && startDateOk && endDateOk && assignUserOk && allTagsValid) {
 					const newCard = new Card({
 						name,
 						description,
